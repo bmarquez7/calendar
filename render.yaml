@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: grow-albania-calendar
+    runtime: static
+    rootDir: web
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: true
+
