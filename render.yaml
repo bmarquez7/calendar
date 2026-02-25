@@ -7,3 +7,28 @@ services:
     staticPublishPath: .
     pullRequestPreviewsEnabled: true
 
+  - type: web
+    name: grow-albania-calendar-admin-api
+    runtime: node
+    rootDir: admin-api
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /v1/health
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: APP_ORIGIN
+        value: https://grow-albania-calendar.onrender.com
+      - key: OWNER_EMAIL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

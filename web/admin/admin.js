@@ -1,5 +1,5 @@
 import { createClient } from "../shared/vendor.js";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET } from "../shared/config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../shared/config.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -7,21 +7,46 @@ const loginGate = document.getElementById("login-gate");
 const protectedApp = document.getElementById("protected-app");
 const loginForm = document.getElementById("login-form");
 const loginStatus = document.getElementById("login-status");
-const adminTools = document.getElementById("admin-tools");
 const logoutButton = document.getElementById("logout");
+const rolePill = document.getElementById("role-pill");
+
 const refreshButton = document.getElementById("refresh");
 const adminCount = document.getElementById("admin-count");
 const adminTableBody = document.querySelector("#admin-table tbody");
+
 const editForm = document.getElementById("edit-form");
 const editStatus = document.getElementById("edit-status");
 const newEventButton = document.getElementById("new-event");
+
+const batchSection = document.getElementById("batch-section");
 const batchForm = document.getElementById("batch-form");
 const batchStatus = document.getElementById("batch-status");
+
+const usersSection = document.getElementById("users-section");
+const usersStatus = document.getElementById("users-status");
+const usersTableBody = document.querySelector("#users-table tbody");
+const inviteForm = document.getElementById("invite-form");
+const resetForm = document.getElementById("reset-form");
+
+const settingsSection = document.getElementById("settings-section");
 const settingsForm = document.getElementById("settings-form");
 const settingsStatus = document.getElementById("settings-status");
 
 let currentEvents = [];
 let selectedId = null;
+let currentRole = null;
+let accessToken = null;
+
+const ROLE_RANK = {
+  moderator: 1,
+  editor: 2,
+  owner: 3
+};
+
+function hasRole(minRole) {
+  if (!currentRole) return false;
+  return ROLE_RANK[currentRole] >= ROLE_RANK[minRole];
+}
 
 function setStatus(element, message) {
   element.style.display = "block";
@@ -44,24 +69,70 @@ async function uploadEventImage(file, folder) {
   return data.publicUrl;
 }
 
+async function api(path, options = {}) {
+  const response = await fetch(`${ADMIN_API_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.headers || {})
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function applyRoleUi() {
+  rolePill.textContent = `role: ${currentRole || "none"}`;
+
+  const canModerate = hasRole("moderator");
+  const canEdit = hasRole("editor");
+  const isOwner = hasRole("owner");
+
+  editForm.closest("section").classList.toggle("hidden", !canEdit);
+  batchSection.classList.toggle("hidden", !canEdit);
+  usersSection.classList.toggle("hidden", !canEdit);
+  settingsSection.classList.toggle("hidden", !isOwner);
+
+  inviteForm.querySelector("select[name='role']").disabled = !isOwner;
+}
+
 function setAuthUi(session) {
   const isAuthed = Boolean(session);
   loginGate.classList.toggle("hidden", isAuthed);
   protectedApp.classList.toggle("hidden", !isAuthed);
-  adminTools.classList.toggle("hidden", !isAuthed);
   if (!isAuthed) {
     adminCount.textContent = "0 events";
     adminTableBody.innerHTML = "";
+    usersTableBody.innerHTML = "";
     selectedId = null;
-    editForm.reset();
-    batchForm.reset();
+    currentRole = null;
+    accessToken = null;
   }
 }
 
 async function ensureSession() {
   const { data } = await client.auth.getSession();
   setAuthUi(data.session);
+  if (data.session) {
+    accessToken = data.session.access_token;
+  }
   return data.session;
+}
+
+async function loadRole() {
+  if (!accessToken) return;
+  try {
+    const result = await api("/v1/me/role", { method: "GET" });
+    currentRole = result?.role || null;
+  } catch (error) {
+    setStatus(loginStatus, error.message);
+    currentRole = null;
+  }
+  applyRoleUi();
 }
 
 async function signIn(email, password) {
@@ -71,7 +142,12 @@ async function signIn(email, password) {
     return;
   }
   setStatus(loginStatus, "Signed in.");
+  const session = await ensureSession();
+  if (!session) return;
+  await loadRole();
   await loadEvents();
+  await loadSettings();
+  await loadUsers();
 }
 
 async function signOut() {
@@ -167,16 +243,11 @@ function buildRecurringRows(payload) {
   }
 
   const start = new Date(payload.date_start);
-  if (Number.isNaN(start.getTime())) {
-    return [];
-  }
-
+  if (Number.isNaN(start.getTime())) return [];
   const end = payload.date_end ? new Date(payload.date_end) : null;
   const durationMs = end && !Number.isNaN(end.getTime()) ? end.getTime() - start.getTime() : null;
   const until = new Date(`${untilRaw}T23:59:59`);
-  if (Number.isNaN(until.getTime()) || until < start) {
-    return [];
-  }
+  if (Number.isNaN(until.getTime()) || until < start) return [];
 
   const rows = [];
   let currentStart = new Date(start);
@@ -195,6 +266,10 @@ function buildRecurringRows(payload) {
 }
 
 async function saveEvent(payload) {
+  if (!hasRole("editor")) {
+    setStatus(editStatus, "Editor or owner required.");
+    return;
+  }
   if (!payload.title_en || !payload.description_en || !payload.date_start) {
     setStatus(editStatus, "Title, description, and date_start are required.");
     return;
@@ -207,10 +282,7 @@ async function saveEvent(payload) {
     delete updatePayload.repeat_until;
     query = client.from("events").update(updatePayload).eq("id", selectedId);
   } else {
-    const recurringRows = buildRecurringRows(payload).map((row) => ({
-      ...row,
-      status: row.status || "approved"
-    }));
+    const recurringRows = buildRecurringRows(payload).map((row) => ({ ...row, status: row.status || "approved" }));
     if (!recurringRows.length) {
       setStatus(editStatus, "Invalid recurring settings. Check repeat frequency and end date.");
       return;
@@ -223,12 +295,12 @@ async function saveEvent(payload) {
     setStatus(editStatus, error.message);
     return;
   }
-
   setStatus(editStatus, selectedId ? "Saved." : "Created recurring event set.");
   await loadEvents();
 }
 
 async function updateStatus(id, status) {
+  if (!hasRole("moderator")) return;
   const { error } = await client.from("events").update({ status }).eq("id", id);
   if (error) {
     alert(error.message);
@@ -238,6 +310,7 @@ async function updateStatus(id, status) {
 }
 
 async function deleteEvent(id) {
+  if (!hasRole("editor")) return;
   const { error } = await client.from("events").delete().eq("id", id);
   if (error) {
     alert(error.message);
@@ -262,26 +335,39 @@ function renderTable() {
     `;
 
     const actionsCell = row.querySelector("td:last-child");
-    const approve = document.createElement("button");
-    approve.textContent = "Approve";
-    approve.addEventListener("click", () => updateStatus(event.id, "approved"));
 
-    const hold = document.createElement("button");
-    hold.textContent = "Hold";
-    hold.className = "secondary";
-    hold.addEventListener("click", () => updateStatus(event.id, "pending"));
+    if (hasRole("moderator")) {
+      const approve = document.createElement("button");
+      approve.textContent = "Approve";
+      approve.addEventListener("click", () => updateStatus(event.id, "approved"));
 
-    const edit = document.createElement("button");
-    edit.textContent = "Edit";
-    edit.className = "secondary";
-    edit.addEventListener("click", () => fillEditForm(event));
+      const hold = document.createElement("button");
+      hold.textContent = "Pending";
+      hold.className = "secondary";
+      hold.addEventListener("click", () => updateStatus(event.id, "pending"));
 
-    const remove = document.createElement("button");
-    remove.textContent = "Delete";
-    remove.className = "secondary";
-    remove.addEventListener("click", () => deleteEvent(event.id));
+      const deny = document.createElement("button");
+      deny.textContent = "Deny";
+      deny.className = "secondary";
+      deny.addEventListener("click", () => updateStatus(event.id, "denied"));
 
-    actionsCell.append(approve, hold, edit, remove);
+      actionsCell.append(approve, hold, deny);
+    }
+
+    if (hasRole("editor")) {
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.className = "secondary";
+      edit.addEventListener("click", () => fillEditForm(event));
+
+      const remove = document.createElement("button");
+      remove.textContent = "Delete";
+      remove.className = "secondary";
+      remove.addEventListener("click", () => deleteEvent(event.id));
+
+      actionsCell.append(edit, remove);
+    }
+
     adminTableBody.appendChild(row);
   });
 }
@@ -289,28 +375,99 @@ function renderTable() {
 async function loadEvents() {
   const session = await ensureSession();
   if (!session) return;
-
   const { data, error } = await client.from("events").select("*").order("date_start", { ascending: true });
   if (error) {
     setStatus(loginStatus, `Load failed: ${error.message}`);
     return;
   }
-
   currentEvents = data || [];
   renderTable();
 }
 
-async function loadSettings() {
-  const session = await ensureSession();
-  if (!session) return;
+async function loadUsers() {
+  if (!hasRole("editor")) return;
+  try {
+    const result = await api("/v1/users", { method: "GET" });
+    const users = result?.users || [];
+    usersTableBody.innerHTML = "";
+    users.forEach((user) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${user.email || ""}</td>
+        <td>${user.id}</td>
+        <td>${user.role || "moderator"}</td>
+        <td></td>
+      `;
+      const actions = row.querySelector("td:last-child");
 
+      if (hasRole("moderator")) {
+        const elevate = document.createElement("button");
+        elevate.className = "secondary";
+        elevate.textContent = "Elevate to editor";
+        elevate.addEventListener("click", async () => {
+          try {
+            await api(`/v1/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: "editor" }) });
+            setStatus(usersStatus, "Role updated.");
+            loadUsers();
+          } catch (error) {
+            setStatus(usersStatus, error.message);
+          }
+        });
+        actions.appendChild(elevate);
+      }
+
+      if (hasRole("owner")) {
+        const roleSelect = document.createElement("select");
+        ["moderator", "editor", "owner"].forEach((r) => {
+          const opt = document.createElement("option");
+          opt.value = r;
+          opt.textContent = r;
+          if (user.role === r) opt.selected = true;
+          roleSelect.appendChild(opt);
+        });
+        roleSelect.addEventListener("change", async () => {
+          try {
+            await api(`/v1/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: roleSelect.value }) });
+            setStatus(usersStatus, "Role updated.");
+            loadUsers();
+          } catch (error) {
+            setStatus(usersStatus, error.message);
+          }
+        });
+        actions.appendChild(roleSelect);
+      }
+
+      if (hasRole("editor")) {
+        const remove = document.createElement("button");
+        remove.className = "secondary";
+        remove.textContent = "Remove user";
+        remove.addEventListener("click", async () => {
+          try {
+            await api(`/v1/users/${user.id}`, { method: "DELETE" });
+            setStatus(usersStatus, "User removed.");
+            loadUsers();
+          } catch (error) {
+            setStatus(usersStatus, error.message);
+          }
+        });
+        actions.appendChild(remove);
+      }
+
+      usersTableBody.appendChild(row);
+    });
+  } catch (error) {
+    setStatus(usersStatus, error.message);
+  }
+}
+
+async function loadSettings() {
+  if (!hasRole("owner")) return;
   const { data, error } = await client.from("site_settings").select("*").eq("id", 1).maybeSingle();
   if (error) {
     setStatus(settingsStatus, `Settings load failed: ${error.message}`);
     return;
   }
   if (!data) return;
-
   settingsForm.hero_title_en.value = data.hero_title_en || "";
   settingsForm.hero_title_es.value = data.hero_title_es || "";
   settingsForm.hero_title_sq.value = data.hero_title_sq || "";
@@ -320,27 +477,6 @@ async function loadSettings() {
   settingsForm.featured_title_en.value = data.featured_title_en || "";
   settingsForm.featured_title_es.value = data.featured_title_es || "";
   settingsForm.featured_title_sq.value = data.featured_title_sq || "";
-}
-
-async function saveSettings(formData) {
-  const payload = {
-    id: 1,
-    hero_title_en: formData.get("hero_title_en") || null,
-    hero_title_es: formData.get("hero_title_es") || null,
-    hero_title_sq: formData.get("hero_title_sq") || null,
-    hero_subtitle_en: formData.get("hero_subtitle_en") || null,
-    hero_subtitle_es: formData.get("hero_subtitle_es") || null,
-    hero_subtitle_sq: formData.get("hero_subtitle_sq") || null,
-    featured_title_en: formData.get("featured_title_en") || null,
-    featured_title_es: formData.get("featured_title_es") || null,
-    featured_title_sq: formData.get("featured_title_sq") || null
-  };
-  const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
-  if (error) {
-    setStatus(settingsStatus, error.message);
-    return;
-  }
-  setStatus(settingsStatus, "Page settings saved.");
 }
 
 function parseBatchLine(line) {
@@ -361,9 +497,7 @@ function parseBatchLine(line) {
     event_image_url
   ] = line.split("|").map((v) => v.trim());
 
-  if (!title || !description || !event_type || !area || !date_start) {
-    return null;
-  }
+  if (!title || !description || !event_type || !area || !date_start) return null;
 
   return {
     title_en: title,
@@ -373,10 +507,7 @@ function parseBatchLine(line) {
     area,
     date_start,
     date_end: date_end || null,
-    event_language: (languages || "en")
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean),
+    event_language: (languages || "en").split(",").map((v) => v.trim()).filter(Boolean),
     price_type: price_type || "Paid",
     price_min: price_min || null,
     price_max: price_max || null,
@@ -388,32 +519,23 @@ function parseBatchLine(line) {
 }
 
 async function batchInsert(raw) {
-  const session = await ensureSession();
-  if (!session) {
-    setStatus(batchStatus, "Please sign in first.");
+  if (!hasRole("editor")) {
+    setStatus(batchStatus, "Editor or owner required.");
     return;
   }
-
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"));
-
+  const lines = raw.split("\n").map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
   const mapped = lines.map(parseBatchLine);
   const validRows = mapped.filter(Boolean);
   const skipped = mapped.length - validRows.length;
-
   if (!validRows.length) {
     setStatus(batchStatus, "No valid rows found.");
     return;
   }
-
   const { error } = await client.from("events").insert(validRows);
   if (error) {
     setStatus(batchStatus, error.message);
     return;
   }
-
   setStatus(batchStatus, `Inserted ${validRows.length} events. Skipped ${skipped} invalid line(s).`);
   await loadEvents();
 }
@@ -450,10 +572,71 @@ batchForm.addEventListener("submit", async (event) => {
   await batchInsert(formData.get("batch_rows") || "");
 });
 
+inviteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!hasRole("editor")) {
+    setStatus(usersStatus, "Editor or owner required.");
+    return;
+  }
+  const formData = new FormData(inviteForm);
+  const role = formData.get("role");
+  if (!hasRole("owner") && role !== "moderator") {
+    setStatus(usersStatus, "Only owner can assign editor/owner during invite.");
+    return;
+  }
+  try {
+    const result = await api("/v1/users/invite", {
+      method: "POST",
+      body: JSON.stringify({ email: formData.get("email"), role })
+    });
+    setStatus(usersStatus, `Invitation sent to ${result.email}.`);
+    inviteForm.reset();
+    loadUsers();
+  } catch (error) {
+    setStatus(usersStatus, error.message);
+  }
+});
+
+resetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!hasRole("editor")) {
+    setStatus(usersStatus, "Editor or owner required.");
+    return;
+  }
+  const formData = new FormData(resetForm);
+  try {
+    const result = await api(`/v1/users/${formData.get("user_id")}/reset`, { method: "POST" });
+    setStatus(usersStatus, `Reset link generated: ${result.action_link}`);
+  } catch (error) {
+    setStatus(usersStatus, error.message);
+  }
+});
+
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!hasRole("owner")) {
+    setStatus(settingsStatus, "Owner required.");
+    return;
+  }
   const formData = new FormData(settingsForm);
-  await saveSettings(formData);
+  const payload = {
+    id: 1,
+    hero_title_en: formData.get("hero_title_en") || null,
+    hero_title_es: formData.get("hero_title_es") || null,
+    hero_title_sq: formData.get("hero_title_sq") || null,
+    hero_subtitle_en: formData.get("hero_subtitle_en") || null,
+    hero_subtitle_es: formData.get("hero_subtitle_es") || null,
+    hero_subtitle_sq: formData.get("hero_subtitle_sq") || null,
+    featured_title_en: formData.get("featured_title_en") || null,
+    featured_title_es: formData.get("featured_title_es") || null,
+    featured_title_sq: formData.get("featured_title_sq") || null
+  };
+  const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
+  if (error) {
+    setStatus(settingsStatus, error.message);
+    return;
+  }
+  setStatus(settingsStatus, "Page settings saved.");
 });
 
 newEventButton.addEventListener("click", (event) => {
@@ -464,14 +647,19 @@ newEventButton.addEventListener("click", (event) => {
 client.auth.onAuthStateChange(async (_evt, session) => {
   setAuthUi(session);
   if (session) {
+    accessToken = session.access_token;
+    await loadRole();
     await loadEvents();
     await loadSettings();
+    await loadUsers();
   }
 });
 
-ensureSession().then((session) => {
+ensureSession().then(async (session) => {
   if (session) {
-    loadEvents();
-    loadSettings();
+    await loadRole();
+    await loadEvents();
+    await loadSettings();
+    await loadUsers();
   }
 });

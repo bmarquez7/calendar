@@ -49,6 +49,14 @@ create table if not exists public.site_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_user_roles (
+  user_id uuid primary key,
+  email text,
+  role text not null check (role in ('moderator', 'editor', 'owner')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.set_updated_at()
 returns trigger as $$
 begin
@@ -64,6 +72,11 @@ for each row execute procedure public.set_updated_at();
 drop trigger if exists set_site_settings_updated_at on public.site_settings;
 create trigger set_site_settings_updated_at
 before update on public.site_settings
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_admin_user_roles_updated_at on public.admin_user_roles;
+create trigger set_admin_user_roles_updated_at
+before update on public.admin_user_roles
 for each row execute procedure public.set_updated_at();
 
 -- Row Level Security
@@ -115,3 +128,23 @@ for update using (auth.role() = 'authenticated');
 
 grant select on public.site_settings to anon, authenticated;
 grant insert, update on public.site_settings to authenticated;
+
+alter table public.admin_user_roles enable row level security;
+
+drop policy if exists "Authenticated read roles" on public.admin_user_roles;
+create policy "Authenticated read roles" on public.admin_user_roles
+for select using (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated insert roles" on public.admin_user_roles;
+create policy "Authenticated insert roles" on public.admin_user_roles
+for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated update roles" on public.admin_user_roles;
+create policy "Authenticated update roles" on public.admin_user_roles
+for update using (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated delete roles" on public.admin_user_roles;
+create policy "Authenticated delete roles" on public.admin_user_roles
+for delete using (auth.role() = 'authenticated');
+
+grant select, insert, update, delete on public.admin_user_roles to authenticated;

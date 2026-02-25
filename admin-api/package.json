@@ -1,0 +1,13 @@
+{
+  "name": "grow-albania-calendar-admin-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "fastify": "^5.2.1"
+  }
+}

@@ -4,15 +4,20 @@ This package contains only the calendar app components, isolated from other loca
 
 ## Included
 - `web/` static frontend (`/widget`, `/admin`)
+- `admin-api/` role-based admin backend (user invites/reset/roles)
 - `data/schema.sql` Supabase schema
+- `data/roles_setup.sql` role bootstrap SQL
 - `scripts/import_events.mjs` optional RSS/ICS importer
-- `render.yaml` Render Blueprint for static deploy
+- `render.yaml` Render Blueprint for static + admin API deploy
 
-## Deploy to Render (Static)
+## Deploy to Render
 1. Push this folder to a dedicated GitHub repo.
 2. In Render, create Blueprint from repo.
 3. Render will use `render.yaml`.
-4. App routes:
+4. It creates:
+   - static site: `grow-albania-calendar`
+   - API service: `grow-albania-calendar-admin-api`
+5. App routes:
    - `/widget/`
    - `/admin/`
 
@@ -24,10 +29,25 @@ This package contains only the calendar app components, isolated from other loca
 
 ## Supabase setup
 1. Run `data/schema.sql` in SQL Editor.
+2. Run `data/roles_setup.sql` in SQL Editor.
 2. Configure `web/shared/config.js`:
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `EVENT_IMAGE_BUCKET` (default `event-posters`)
+   - `ADMIN_API_URL` (set to your admin API Render URL)
+
+## Seed owner role
+1. Sign in once in admin so your user exists in `auth.users`.
+2. In Supabase SQL Editor:
+```sql
+select id,email from auth.users where email = 'YOUR_EMAIL_HERE';
+```
+3. Copy the `id`, then run:
+```sql
+insert into public.admin_user_roles(user_id,email,role)
+values ('USER_UUID','YOUR_EMAIL_HERE','owner')
+on conflict (user_id) do update set role='owner', email=excluded.email;
+```
 
 ## Storage setup for image upload
 Run this SQL in Supabase SQL Editor:
