@@ -31,11 +31,16 @@ const resetForm = document.getElementById("reset-form");
 const settingsSection = document.getElementById("settings-section");
 const settingsForm = document.getElementById("settings-form");
 const settingsStatus = document.getElementById("settings-status");
+const taskHub = document.getElementById("task-hub");
+const taskPages = Array.from(document.querySelectorAll(".task-page"));
+const taskButtons = Array.from(document.querySelectorAll("[data-open-page]"));
+const hubBackButtons = Array.from(document.querySelectorAll("[data-back-to-hub]"));
 
 let currentEvents = [];
 let selectedId = null;
 let currentRole = null;
 let accessToken = null;
+let activeTaskPage = null;
 
 const ROLE_RANK = {
   moderator: 1,
@@ -46,6 +51,30 @@ const ROLE_RANK = {
 function hasRole(minRole) {
   if (!currentRole) return false;
   return ROLE_RANK[currentRole] >= ROLE_RANK[minRole];
+}
+
+function pageAllowed(pageId) {
+  if (pageId === "event-queue-page") return hasRole("moderator");
+  if (pageId === "event-editor-page") return hasRole("editor");
+  if (pageId === "batch-page") return hasRole("editor");
+  if (pageId === "users-page") return hasRole("editor");
+  if (pageId === "settings-page") return hasRole("owner");
+  return false;
+}
+
+function showTaskHub() {
+  activeTaskPage = null;
+  taskHub.classList.remove("hidden");
+  taskPages.forEach((page) => page.classList.add("hidden"));
+}
+
+function showTaskPage(pageId) {
+  if (!pageAllowed(pageId)) return;
+  activeTaskPage = pageId;
+  taskHub.classList.add("hidden");
+  taskPages.forEach((page) => {
+    page.classList.toggle("hidden", page.id !== pageId);
+  });
 }
 
 function setStatus(element, message) {
@@ -88,16 +117,20 @@ async function api(path, options = {}) {
 function applyRoleUi() {
   rolePill.textContent = `role: ${currentRole || "none"}`;
 
-  const canModerate = hasRole("moderator");
-  const canEdit = hasRole("editor");
-  const isOwner = hasRole("owner");
+  taskButtons.forEach((button) => {
+    const pageId = button.dataset.openPage || "";
+    button.classList.toggle("hidden", !pageAllowed(pageId));
+  });
+  taskPages.forEach((page) => {
+    page.classList.toggle("hidden", true);
+  });
+  if (activeTaskPage && pageAllowed(activeTaskPage)) {
+    showTaskPage(activeTaskPage);
+  } else {
+    showTaskHub();
+  }
 
-  editForm.closest("section").classList.toggle("hidden", !canEdit);
-  batchSection.classList.toggle("hidden", !canEdit);
-  usersSection.classList.toggle("hidden", !canEdit);
-  settingsSection.classList.toggle("hidden", !isOwner);
-
-  inviteForm.querySelector("select[name='role']").disabled = !isOwner;
+  inviteForm.querySelector("select[name='role']").disabled = !hasRole("owner");
 }
 
 function setAuthUi(session) {
@@ -111,6 +144,7 @@ function setAuthUi(session) {
     selectedId = null;
     currentRole = null;
     accessToken = null;
+    showTaskHub();
   }
 }
 
@@ -358,7 +392,10 @@ function renderTable() {
       const edit = document.createElement("button");
       edit.textContent = "Edit";
       edit.className = "secondary";
-      edit.addEventListener("click", () => fillEditForm(event));
+      edit.addEventListener("click", () => {
+        fillEditForm(event);
+        showTaskPage("event-editor-page");
+      });
 
       const remove = document.createElement("button");
       remove.textContent = "Delete";
@@ -549,6 +586,18 @@ loginForm.addEventListener("submit", async (event) => {
 
 logoutButton.addEventListener("click", signOut);
 refreshButton.addEventListener("click", loadEvents);
+taskButtons.forEach((button) => {
+  button.addEventListener("click", async () => {
+    const pageId = button.dataset.openPage || "";
+    showTaskPage(pageId);
+    if (pageId === "event-queue-page") await loadEvents();
+    if (pageId === "users-page") await loadUsers();
+    if (pageId === "settings-page") await loadSettings();
+  });
+});
+hubBackButtons.forEach((button) => {
+  button.addEventListener("click", () => showTaskHub());
+});
 
 editForm.addEventListener("submit", async (event) => {
   event.preventDefault();

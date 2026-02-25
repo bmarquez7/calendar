@@ -324,6 +324,27 @@ section {
   align-items: center;
 }
 
+.task-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 12px;
+}
+
+.task-card {
+  text-align: left;
+  min-height: 92px;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.task-card:hover {
+  background: #ffe9d1;
+}
+
 .hidden {
   display: none;
 }

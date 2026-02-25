@@ -35,8 +35,48 @@
       </section>
 
       <section id="admin-tools">
-        <section class="grid-two" id="event-editor-section">
+        <section id="task-hub">
           <div class="form-card">
+            <h2>Admin Tasks</h2>
+            <p class="small">Select a task box to open that task on its own page.</p>
+            <div class="task-grid">
+              <button class="task-card" data-open-page="event-queue-page" data-min-role="moderator">Review event queue</button>
+              <button class="task-card" data-open-page="event-editor-page" data-min-role="editor">Create and edit events</button>
+              <button class="task-card" data-open-page="batch-page" data-min-role="editor">Batch add events</button>
+              <button class="task-card" data-open-page="users-page" data-min-role="editor">Manage users and roles</button>
+              <button class="task-card" data-open-page="settings-page" data-min-role="owner">Customize widget page</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="event-queue-page" class="task-page hidden">
+          <div class="admin-bar" style="margin-bottom: 12px;">
+            <button class="secondary" data-back-to-hub>Back to tasks</button>
+          </div>
+          <div class="admin-bar">
+            <span class="badge" id="admin-count">0 events</span>
+            <button class="secondary" id="refresh">Refresh</button>
+          </div>
+          <table class="table" id="admin-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Area</th>
+                <th>Type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section id="event-editor-page" class="task-page hidden">
+          <div class="admin-bar" style="margin-bottom: 12px;">
+            <button class="secondary" data-back-to-hub>Back to tasks</button>
+          </div>
+          <div class="form-card" id="event-editor-section">
             <h2>Edit event</h2>
             <div class="admin-bar" style="margin-bottom: 10px;">
               <button class="secondary" id="new-event">Create new event</button>
@@ -81,7 +121,12 @@
               <div class="notice" id="edit-status" style="display:none;"></div>
             </form>
           </div>
+        </section>
 
+        <section id="batch-page" class="task-page hidden">
+          <div class="admin-bar" style="margin-bottom: 12px;">
+            <button class="secondary" data-back-to-hub>Back to tasks</button>
+          </div>
           <div class="form-card" id="batch-section">
             <h2>Batch add events</h2>
             <p class="small">
@@ -103,28 +148,11 @@
           </div>
         </section>
 
-        <section>
-          <div class="admin-bar">
-            <span class="badge" id="admin-count">0 events</span>
-            <button class="secondary" id="refresh">Refresh</button>
+        <section id="users-page" class="task-page hidden">
+          <div class="admin-bar" style="margin-bottom: 12px;">
+            <button class="secondary" data-back-to-hub>Back to tasks</button>
           </div>
-          <table class="table" id="admin-table">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Area</th>
-                <th>Type</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </section>
-
-        <section id="users-section">
-          <div class="form-card">
+          <div class="form-card" id="users-section">
             <h2>User access management</h2>
             <div class="grid-two">
               <form id="invite-form">
@@ -156,8 +184,11 @@
           </div>
         </section>
 
-        <section id="settings-section">
-          <div class="form-card">
+        <section id="settings-page" class="task-page hidden">
+          <div class="admin-bar" style="margin-bottom: 12px;">
+            <button class="secondary" data-back-to-hub>Back to tasks</button>
+          </div>
+          <div class="form-card" id="settings-section">
             <h2>Page settings</h2>
             <p class="small">Customize widget title, subtitle, and highlighted section title per language.</p>
             <form id="settings-form">
