@@ -432,6 +432,7 @@ function renderFeatured() {
     .filter((event) => event.date_start)
     .sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
     .slice(0, 10);
+  const placeholderImage = state.settings?.featured_placeholder_image_url || "";
 
   featuredGrid.innerHTML = "";
   const list = [...items];
@@ -444,7 +445,12 @@ function renderFeatured() {
     box.className = "featured-item";
     if (!event) {
       box.classList.add("featured-item-empty");
-      box.innerHTML = "<h4>No event</h4><p>Coming soon</p><p></p>";
+      if (placeholderImage) {
+        box.classList.add("featured-item-empty-image");
+        box.innerHTML = `<img class="featured-placeholder-image" src="${placeholderImage}" alt="More events coming soon" loading="lazy" />`;
+      } else {
+        box.innerHTML = "<h4>No event</h4><p>Coming soon</p><p></p>";
+      }
       featuredGrid.appendChild(box);
       return;
     }

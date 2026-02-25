@@ -477,6 +477,7 @@ async function loadSettings() {
   settingsForm.featured_title_en.value = data.featured_title_en || "";
   settingsForm.featured_title_es.value = data.featured_title_es || "";
   settingsForm.featured_title_sq.value = data.featured_title_sq || "";
+  settingsForm.featured_placeholder_image_url.value = data.featured_placeholder_image_url || "";
 }
 
 function parseBatchLine(line) {
@@ -629,7 +630,8 @@ settingsForm.addEventListener("submit", async (event) => {
     hero_subtitle_sq: formData.get("hero_subtitle_sq") || null,
     featured_title_en: formData.get("featured_title_en") || null,
     featured_title_es: formData.get("featured_title_es") || null,
-    featured_title_sq: formData.get("featured_title_sq") || null
+    featured_title_sq: formData.get("featured_title_sq") || null,
+    featured_placeholder_image_url: formData.get("featured_placeholder_image_url") || null
   };
   const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
   if (error) {

@@ -46,6 +46,7 @@ create table if not exists public.site_settings (
   featured_title_en text,
   featured_title_es text,
   featured_title_sq text,
+  featured_placeholder_image_url text,
   updated_at timestamptz not null default now()
 );
 
