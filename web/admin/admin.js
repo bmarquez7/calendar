@@ -620,6 +620,18 @@ settingsForm.addEventListener("submit", async (event) => {
     return;
   }
   const formData = new FormData(settingsForm);
+  let featuredPlaceholderImageUrl = formData.get("featured_placeholder_image_url") || null;
+  const selectedPlaceholderFile = formData.get("featured_placeholder_image_file");
+
+  if (selectedPlaceholderFile && selectedPlaceholderFile.size > 0) {
+    try {
+      featuredPlaceholderImageUrl = await uploadEventImage(selectedPlaceholderFile, "settings");
+    } catch (uploadError) {
+      setStatus(settingsStatus, `Placeholder image upload failed: ${uploadError.message}`);
+      return;
+    }
+  }
+
   const payload = {
     id: 1,
     hero_title_en: formData.get("hero_title_en") || null,
@@ -631,7 +643,7 @@ settingsForm.addEventListener("submit", async (event) => {
     featured_title_en: formData.get("featured_title_en") || null,
     featured_title_es: formData.get("featured_title_es") || null,
     featured_title_sq: formData.get("featured_title_sq") || null,
-    featured_placeholder_image_url: formData.get("featured_placeholder_image_url") || null
+    featured_placeholder_image_url: featuredPlaceholderImageUrl
   };
   const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
   if (error) {
