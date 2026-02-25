@@ -35,6 +35,20 @@ create table if not exists public.events (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.site_settings (
+  id integer primary key check (id = 1),
+  hero_title_en text,
+  hero_title_es text,
+  hero_title_sq text,
+  hero_subtitle_en text,
+  hero_subtitle_es text,
+  hero_subtitle_sq text,
+  featured_title_en text,
+  featured_title_es text,
+  featured_title_sq text,
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.set_updated_at()
 returns trigger as $$
 begin
@@ -45,6 +59,11 @@ $$ language plpgsql;
 
 create trigger set_events_updated_at
 before update on public.events
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_site_settings_updated_at on public.site_settings;
+create trigger set_site_settings_updated_at
+before update on public.site_settings
 for each row execute procedure public.set_updated_at();
 
 -- Row Level Security
@@ -79,3 +98,20 @@ for update using (auth.role() = 'authenticated');
 
 create policy "Admin delete" on public.events
 for delete using (auth.role() = 'authenticated');
+
+alter table public.site_settings enable row level security;
+
+drop policy if exists "Public read site settings" on public.site_settings;
+create policy "Public read site settings" on public.site_settings
+for select using (true);
+
+drop policy if exists "Authenticated upsert site settings" on public.site_settings;
+create policy "Authenticated upsert site settings" on public.site_settings
+for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "Authenticated update site settings" on public.site_settings;
+create policy "Authenticated update site settings" on public.site_settings
+for update using (auth.role() = 'authenticated');
+
+grant select on public.site_settings to anon, authenticated;
+grant insert, update on public.site_settings to authenticated;

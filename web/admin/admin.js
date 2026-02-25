@@ -17,6 +17,8 @@ const editStatus = document.getElementById("edit-status");
 const newEventButton = document.getElementById("new-event");
 const batchForm = document.getElementById("batch-form");
 const batchStatus = document.getElementById("batch-status");
+const settingsForm = document.getElementById("settings-form");
+const settingsStatus = document.getElementById("settings-status");
 
 let currentEvents = [];
 let selectedId = null;
@@ -298,6 +300,49 @@ async function loadEvents() {
   renderTable();
 }
 
+async function loadSettings() {
+  const session = await ensureSession();
+  if (!session) return;
+
+  const { data, error } = await client.from("site_settings").select("*").eq("id", 1).maybeSingle();
+  if (error) {
+    setStatus(settingsStatus, `Settings load failed: ${error.message}`);
+    return;
+  }
+  if (!data) return;
+
+  settingsForm.hero_title_en.value = data.hero_title_en || "";
+  settingsForm.hero_title_es.value = data.hero_title_es || "";
+  settingsForm.hero_title_sq.value = data.hero_title_sq || "";
+  settingsForm.hero_subtitle_en.value = data.hero_subtitle_en || "";
+  settingsForm.hero_subtitle_es.value = data.hero_subtitle_es || "";
+  settingsForm.hero_subtitle_sq.value = data.hero_subtitle_sq || "";
+  settingsForm.featured_title_en.value = data.featured_title_en || "";
+  settingsForm.featured_title_es.value = data.featured_title_es || "";
+  settingsForm.featured_title_sq.value = data.featured_title_sq || "";
+}
+
+async function saveSettings(formData) {
+  const payload = {
+    id: 1,
+    hero_title_en: formData.get("hero_title_en") || null,
+    hero_title_es: formData.get("hero_title_es") || null,
+    hero_title_sq: formData.get("hero_title_sq") || null,
+    hero_subtitle_en: formData.get("hero_subtitle_en") || null,
+    hero_subtitle_es: formData.get("hero_subtitle_es") || null,
+    hero_subtitle_sq: formData.get("hero_subtitle_sq") || null,
+    featured_title_en: formData.get("featured_title_en") || null,
+    featured_title_es: formData.get("featured_title_es") || null,
+    featured_title_sq: formData.get("featured_title_sq") || null
+  };
+  const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
+  if (error) {
+    setStatus(settingsStatus, error.message);
+    return;
+  }
+  setStatus(settingsStatus, "Page settings saved.");
+}
+
 function parseBatchLine(line) {
   const [
     title,
@@ -405,6 +450,12 @@ batchForm.addEventListener("submit", async (event) => {
   await batchInsert(formData.get("batch_rows") || "");
 });
 
+settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(settingsForm);
+  await saveSettings(formData);
+});
+
 newEventButton.addEventListener("click", (event) => {
   event.preventDefault();
   clearFormForNew();
@@ -414,11 +465,13 @@ client.auth.onAuthStateChange(async (_evt, session) => {
   setAuthUi(session);
   if (session) {
     await loadEvents();
+    await loadSettings();
   }
 });
 
 ensureSession().then((session) => {
   if (session) {
     loadEvents();
+    loadSettings();
   }
 });

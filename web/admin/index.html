@@ -101,6 +101,26 @@
         </section>
 
         <section>
+          <div class="form-card">
+            <h2>Page settings</h2>
+            <p class="small">Customize widget title, subtitle, and highlighted section title per language.</p>
+            <form id="settings-form">
+              <input name="hero_title_en" placeholder="Hero title (English)" />
+              <input name="hero_title_es" placeholder="Hero title (Spanish)" />
+              <input name="hero_title_sq" placeholder="Hero title (Albanian)" />
+              <textarea name="hero_subtitle_en" placeholder="Hero subtitle (English)"></textarea>
+              <textarea name="hero_subtitle_es" placeholder="Hero subtitle (Spanish)"></textarea>
+              <textarea name="hero_subtitle_sq" placeholder="Hero subtitle (Albanian)"></textarea>
+              <input name="featured_title_en" placeholder="Highlighted title (English)" />
+              <input name="featured_title_es" placeholder="Highlighted title (Spanish)" />
+              <input name="featured_title_sq" placeholder="Highlighted title (Albanian)" />
+              <button type="submit">Save page settings</button>
+              <div class="notice" id="settings-status" style="display:none;"></div>
+            </form>
+          </div>
+        </section>
+
+        <section>
           <div class="admin-bar">
             <span class="badge" id="admin-count">0 events</span>
             <button class="secondary" id="refresh">Refresh</button>

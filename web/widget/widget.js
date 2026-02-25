@@ -6,6 +6,7 @@ const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
   events: [],
+  settings: null,
   uiLang: DEFAULT_UI_LANG,
   viewMode: "list",
   calendarDate: new Date(),
@@ -95,10 +96,14 @@ const uiStrings = {
 
 const filterControls = document.getElementById("filter-controls");
 const eventList = document.getElementById("event-list");
+const featuredGrid = document.getElementById("featured-grid");
+const featuredTitle = document.getElementById("featured-title");
 const resultsCount = document.getElementById("results-count");
 const resetFilters = document.getElementById("reset-filters");
 const submitForm = document.getElementById("submit-form");
 const submitStatus = document.getElementById("submit-status");
+const languageButton = document.getElementById("language-button");
+const languageMenu = document.getElementById("language-menu");
 const viewControls = document.getElementById("view-controls");
 const calendarView = document.getElementById("calendar-view");
 const repeatFrequencyInput = submitForm.querySelector("select[name='repeat_frequency']");
@@ -113,6 +118,11 @@ state.weekStart = startOfWeek(new Date());
 function pickText(row, base) {
   const key = `${base}_${state.uiLang}`;
   return row[key] || row[`${base}_en`] || row[base] || "";
+}
+
+function pickSetting(base, fallback) {
+  if (!state.settings) return fallback;
+  return state.settings[`${base}_${state.uiLang}`] || state.settings[`${base}_en`] || fallback;
 }
 
 function formatDateRange(start, end) {
@@ -334,16 +344,6 @@ function renderFilters() {
     createInput("dateTo", strings.filters.dateTo, "date"),
     createSelect("sort", strings.filters.sort, Object.entries(strings.sortOptions).map(([value, label]) => ({ value, label })), false)
   );
-
-  const langSelect = createSelect("uiLang", "UI language", LANGS, false);
-  langSelect.querySelector("select").value = state.uiLang;
-  langSelect.querySelector("select").addEventListener("change", (event) => {
-    state.uiLang = event.target.value;
-    syncUiCopy();
-    renderFilters();
-    render();
-  });
-  filterControls.appendChild(langSelect);
 }
 
 function filterEvents() {
@@ -424,6 +424,37 @@ function renderEvents() {
     }
     card.addEventListener("click", () => openModal(eventDetailHtml(event)));
     eventList.appendChild(card);
+  });
+}
+
+function renderFeatured() {
+  const items = [...state.events]
+    .filter((event) => event.date_start)
+    .sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
+    .slice(0, 10);
+
+  featuredGrid.innerHTML = "";
+  const list = [...items];
+  while (list.length < 10) {
+    list.push(null);
+  }
+
+  list.forEach((event) => {
+    const box = document.createElement("div");
+    box.className = "featured-item";
+    if (!event) {
+      box.classList.add("featured-item-empty");
+      box.innerHTML = "<h4>No event</h4><p>Coming soon</p><p></p>";
+      featuredGrid.appendChild(box);
+      return;
+    }
+    box.innerHTML = `
+      <h4>${pickText(event, "title") || "Untitled"}</h4>
+      <p>${formatDateRange(event.date_start, event.date_end)}</p>
+      <p>${pickText(event, "location") || event.area || ""}</p>
+    `;
+    box.addEventListener("click", () => openModal(eventDetailHtml(event)));
+    featuredGrid.appendChild(box);
   });
 }
 
@@ -576,6 +607,7 @@ function renderCalendarWeek(events) {
 function render() {
   const events = filterEvents();
   renderEvents();
+  renderFeatured();
   const showCalendar = state.viewMode !== "list";
   calendarView.classList.toggle("hidden", !showCalendar);
   eventList.classList.toggle("hidden", showCalendar);
@@ -588,11 +620,14 @@ function render() {
 
 function syncUiCopy() {
   const strings = uiStrings[state.uiLang];
-  document.getElementById("hero-title").textContent = strings.title;
-  document.getElementById("hero-subtitle").textContent = strings.subtitle;
+  document.getElementById("hero-title").textContent = pickSetting("hero_title", strings.title);
+  document.getElementById("hero-subtitle").textContent = pickSetting("hero_subtitle", strings.subtitle);
+  featuredTitle.textContent = pickSetting("featured_title", "Highlighted Events");
   document.getElementById("submit-title").textContent = strings.submitTitle;
   document.getElementById("submit-subtitle").textContent = strings.submitSubtitle;
   resetFilters.textContent = strings.reset;
+  const currentLang = LANGS.find((lang) => lang.code === state.uiLang);
+  languageButton.textContent = `Language: ${currentLang ? currentLang.label : "English"}`;
 }
 
 async function loadEvents() {
@@ -607,6 +642,13 @@ async function loadEvents() {
     return;
   }
   state.events = data || [];
+  render();
+}
+
+async function loadSettings() {
+  const { data } = await client.from("site_settings").select("*").eq("id", 1).maybeSingle();
+  state.settings = data || null;
+  syncUiCopy();
   render();
 }
 
@@ -751,6 +793,28 @@ submitForm.addEventListener("submit", handleSubmit);
 repeatFrequencyInput.addEventListener("change", () => {
   repeatUntilInput.required = repeatFrequencyInput.value !== "none";
 });
+languageButton.addEventListener("click", () => {
+  languageMenu.classList.toggle("hidden");
+});
+document.addEventListener("click", (event) => {
+  if (!languageButton.contains(event.target) && !languageMenu.contains(event.target)) {
+    languageMenu.classList.add("hidden");
+  }
+});
+LANGS.forEach((lang) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "secondary";
+  button.textContent = lang.label;
+  button.addEventListener("click", () => {
+    state.uiLang = lang.code;
+    languageMenu.classList.add("hidden");
+    syncUiCopy();
+    renderFilters();
+    render();
+  });
+  languageMenu.appendChild(button);
+});
 modalClose.addEventListener("click", closeModal);
 eventModal.addEventListener("click", (event) => {
   if (event.target.dataset.closeModal === "true") {
@@ -768,3 +832,4 @@ renderFilters();
 hydrateFormOptions();
 render();
 loadEvents();
+loadSettings();

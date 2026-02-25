@@ -12,11 +12,21 @@
   <body>
     <div class="app">
       <section class="hero">
+        <div class="hero-top">
+          <div class="language-switcher">
+            <button type="button" class="secondary" id="language-button">Language</button>
+            <div id="language-menu" class="language-menu hidden"></div>
+          </div>
+        </div>
         <h1 id="hero-title">Tirana Events Calendar</h1>
         <p id="hero-subtitle">
           Discover culture, community, and nightlife across Tirana. Filter by area, type, language, date, and price.
         </p>
         <div class="controls" id="filter-controls"></div>
+        <div class="featured-box">
+          <h3 id="featured-title">Highlighted Events</h3>
+          <div id="featured-grid" class="featured-grid"></div>
+        </div>
       </section>
 
       <section class="grid-two">
