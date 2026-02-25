@@ -1,6 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import { createClient } from "@supabase/supabase-js";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = Fastify({ logger: true });
 
@@ -23,11 +26,19 @@ const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const ROLE_RANK = { moderator: 1, editor: 2, owner: 3 };
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const webRoot = join(__dirname, "..", "web");
 
 await app.register(cors, {
   origin: APP_ORIGIN === "*" ? true : APP_ORIGIN,
   methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"]
+});
+
+await app.register(fastifyStatic, {
+  root: webRoot,
+  prefix: "/",
+  index: false
 });
 
 async function getRole(user) {
@@ -56,6 +67,8 @@ function canRole(actorRole, minRole) {
 }
 
 app.addHook("preHandler", async (request, reply) => {
+  const path = request.raw.url || "";
+  if (!path.startsWith("/v1/")) return;
   if (request.routerPath === "/v1/health") return;
   const auth = request.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -76,6 +89,18 @@ app.addHook("preHandler", async (request, reply) => {
 });
 
 app.get("/v1/health", async () => ({ ok: true }));
+
+app.get("/", async (_, reply) => {
+  return reply.redirect("/widget/");
+});
+
+app.get("/widget/", async (_, reply) => {
+  return reply.sendFile("widget/index.html");
+});
+
+app.get("/admin/", async (_, reply) => {
+  return reply.sendFile("admin/index.html");
+});
 
 app.get("/v1/me/role", async (request, reply) => {
   if (!request.user) return reply.code(401).send({ error: "Unauthorized" });
