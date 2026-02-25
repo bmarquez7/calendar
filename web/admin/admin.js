@@ -77,9 +77,13 @@ function showTaskPage(pageId) {
   });
 }
 
-function setStatus(element, message) {
+function setStatus(element, message, kind = "info") {
   element.style.display = "block";
   element.textContent = message;
+  element.classList.remove("success", "error");
+  if (kind === "success") element.classList.add("success");
+  if (kind === "error") element.classList.add("error");
+  element.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function sanitizeFilename(name) {
@@ -699,7 +703,7 @@ settingsForm.addEventListener("submit", async (event) => {
     setStatus(settingsStatus, error.message);
     return;
   }
-  setStatus(settingsStatus, "Page settings saved.");
+  setStatus(settingsStatus, "Save successful.", "success");
 });
 
 newEventButton.addEventListener("click", (event) => {

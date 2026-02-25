@@ -317,6 +317,18 @@ section {
   border: 1px solid #f1d2b9;
 }
 
+.notice.success {
+  background: #e9f8ef;
+  color: #155b2d;
+  border-color: #b8e7c7;
+}
+
+.notice.error {
+  background: #fdeeee;
+  color: #7f1d1d;
+  border-color: #f6c4c4;
+}
+
 .admin-bar {
   display: flex;
   flex-wrap: wrap;
