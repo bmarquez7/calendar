@@ -21,6 +21,11 @@ const newEventButton = document.getElementById("new-event");
 const batchSection = document.getElementById("batch-section");
 const batchForm = document.getElementById("batch-form");
 const batchStatus = document.getElementById("batch-status");
+const batchRowsBody = document.getElementById("batch-rows");
+const batchRowCount = document.getElementById("batch-row-count");
+const batchAddRowButton = document.getElementById("batch-add-row");
+const batchAddTenButton = document.getElementById("batch-add-ten");
+const batchFillFiftyButton = document.getElementById("batch-fill-fifty");
 
 const usersSection = document.getElementById("users-section");
 const usersStatus = document.getElementById("users-status");
@@ -41,6 +46,7 @@ let selectedId = null;
 let currentRole = null;
 let accessToken = null;
 let activeTaskPage = null;
+const MAX_BATCH_ROWS = 50;
 
 const ROLE_RANK = {
   moderator: 1,
@@ -521,64 +527,205 @@ async function loadSettings() {
   settingsForm.featured_placeholder_image_url.value = data.featured_placeholder_image_url || "";
 }
 
-function parseBatchLine(line) {
-  const [
-    title,
-    description,
-    location,
-    event_type,
-    area,
-    date_start,
-    date_end,
-    languages,
-    price_type,
-    price_min,
-    price_max,
-    status,
-    ticket_url,
-    event_image_url
-  ] = line.split("|").map((v) => v.trim());
+function updateBatchRowCount() {
+  const count = batchRowsBody.querySelectorAll("tr").length;
+  batchRowCount.textContent = `${count} / ${MAX_BATCH_ROWS} rows`;
+}
 
-  if (!title || !description || !event_type || !area || !date_start) return null;
+function createBatchCell(type, className, placeholder = "", required = false) {
+  const td = document.createElement("td");
+  const input = document.createElement("input");
+  input.type = type;
+  input.className = className;
+  if (placeholder) input.placeholder = placeholder;
+  if (required) input.required = true;
+  td.appendChild(input);
+  return td;
+}
+
+function addBatchRow(prefill = {}) {
+  const currentCount = batchRowsBody.querySelectorAll("tr").length;
+  if (currentCount >= MAX_BATCH_ROWS) return;
+
+  const row = document.createElement("tr");
+  row.innerHTML = `<td class="batch-row-index"></td>`;
+  row.appendChild(createBatchCell("text", "batch-title", "Title", true));
+  row.appendChild(createBatchCell("text", "batch-description", "Description", true));
+  row.appendChild(createBatchCell("text", "batch-location", "Location", true));
+  row.appendChild(createBatchCell("text", "batch-type", "Type", true));
+  row.appendChild(createBatchCell("text", "batch-area", "Area", true));
+  row.appendChild(createBatchCell("datetime-local", "batch-date-start", "", true));
+  row.appendChild(createBatchCell("datetime-local", "batch-date-end", "", true));
+  row.appendChild(createBatchCell("text", "batch-languages", "en,sq", true));
+  row.appendChild(createBatchCell("text", "batch-price-type", "Paid", true));
+  row.appendChild(createBatchCell("number", "batch-price-min", "0", true));
+  row.appendChild(createBatchCell("number", "batch-price-max", "0", true));
+  row.appendChild(createBatchCell("text", "batch-currency", "ALL", true));
+  row.appendChild(createBatchCell("text", "batch-status", "pending", true));
+  row.appendChild(createBatchCell("url", "batch-ticket-url", "https://...", true));
+  row.appendChild(createBatchCell("url", "batch-image-url", "https://...", false));
+
+  const fileTd = document.createElement("td");
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.className = "batch-image-file";
+  fileInput.accept = "image/*";
+  fileTd.appendChild(fileInput);
+  row.appendChild(fileTd);
+
+  const actionTd = document.createElement("td");
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "secondary";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    reindexBatchRows();
+  });
+  actionTd.appendChild(removeButton);
+  row.appendChild(actionTd);
+
+  batchRowsBody.appendChild(row);
+
+  row.querySelector(".batch-title").value = prefill.title_en || "";
+  row.querySelector(".batch-description").value = prefill.description_en || "";
+  row.querySelector(".batch-location").value = prefill.location_en || "";
+  row.querySelector(".batch-type").value = prefill.event_type || "";
+  row.querySelector(".batch-area").value = prefill.area || "";
+  row.querySelector(".batch-date-start").value = prefill.date_start || "";
+  row.querySelector(".batch-date-end").value = prefill.date_end || "";
+  row.querySelector(".batch-languages").value = prefill.event_language || "en";
+  row.querySelector(".batch-price-type").value = prefill.price_type || "Paid";
+  row.querySelector(".batch-price-min").value = prefill.price_min || "0";
+  row.querySelector(".batch-price-max").value = prefill.price_max || "0";
+  row.querySelector(".batch-currency").value = prefill.currency || "ALL";
+  row.querySelector(".batch-status").value = prefill.status || "pending";
+  row.querySelector(".batch-ticket-url").value = prefill.ticket_url || "";
+  row.querySelector(".batch-image-url").value = prefill.event_image_url || "";
+
+  reindexBatchRows();
+}
+
+function reindexBatchRows() {
+  Array.from(batchRowsBody.querySelectorAll("tr")).forEach((row, index) => {
+    row.querySelector(".batch-row-index").textContent = String(index + 1);
+  });
+  updateBatchRowCount();
+}
+
+function rowIsEmpty(row) {
+  const textValues = [
+    ".batch-title",
+    ".batch-description",
+    ".batch-location",
+    ".batch-type",
+    ".batch-area",
+    ".batch-date-start",
+    ".batch-date-end",
+    ".batch-languages",
+    ".batch-price-type",
+    ".batch-price-min",
+    ".batch-price-max",
+    ".batch-currency",
+    ".batch-status",
+    ".batch-ticket-url",
+    ".batch-image-url"
+  ].map((selector) => (row.querySelector(selector)?.value || "").trim());
+  const hasText = textValues.some((value) => value.length > 0);
+  const file = row.querySelector(".batch-image-file")?.files?.[0];
+  return !hasText && !file;
+}
+
+function collectBatchRowPayload(row) {
+  const title_en = (row.querySelector(".batch-title")?.value || "").trim();
+  const description_en = (row.querySelector(".batch-description")?.value || "").trim();
+  const location_en = (row.querySelector(".batch-location")?.value || "").trim();
+  const event_type = (row.querySelector(".batch-type")?.value || "").trim();
+  const area = (row.querySelector(".batch-area")?.value || "").trim();
+  const date_start = (row.querySelector(".batch-date-start")?.value || "").trim();
+  const date_end = (row.querySelector(".batch-date-end")?.value || "").trim();
+  const languages = (row.querySelector(".batch-languages")?.value || "").trim();
+  const price_type = (row.querySelector(".batch-price-type")?.value || "").trim();
+  const price_min = (row.querySelector(".batch-price-min")?.value || "").trim();
+  const price_max = (row.querySelector(".batch-price-max")?.value || "").trim();
+  const currency = (row.querySelector(".batch-currency")?.value || "").trim();
+  const status = (row.querySelector(".batch-status")?.value || "").trim();
+  const ticket_url = (row.querySelector(".batch-ticket-url")?.value || "").trim();
+  const event_image_url = (row.querySelector(".batch-image-url")?.value || "").trim();
+  const event_image_file = row.querySelector(".batch-image-file")?.files?.[0] || null;
+
+  const requiredValues = [title_en, description_en, location_en, event_type, area, date_start, date_end, languages, price_type, price_min, price_max, currency, status, ticket_url];
+  const missingRequired = requiredValues.some((value) => !value);
 
   return {
-    title_en: title,
-    description_en: description,
-    location_en: location || null,
-    event_type,
-    area,
-    date_start,
-    date_end: date_end || null,
-    event_language: (languages || "en").split(",").map((v) => v.trim()).filter(Boolean),
-    price_type: price_type || "Paid",
-    price_min: price_min || null,
-    price_max: price_max || null,
-    status: status || "pending",
-    currency: "ALL",
-    ticket_url: ticket_url || null,
-    event_image_url: event_image_url || null
+    missingRequired,
+    event_image_file,
+    payload: {
+      title_en,
+      description_en,
+      location_en,
+      event_type,
+      area,
+      date_start,
+      date_end,
+      event_language: languages.split(",").map((v) => v.trim()).filter(Boolean),
+      price_type,
+      price_min: price_min || null,
+      price_max: price_max || null,
+      currency,
+      status,
+      ticket_url,
+      event_image_url: event_image_url || null
+    }
   };
 }
 
-async function batchInsert(raw) {
+async function batchInsertRows() {
   if (!hasRole("editor")) {
-    setStatus(batchStatus, "Editor or owner required.");
+    setStatus(batchStatus, "Editor or owner required.", "error");
     return;
   }
-  const lines = raw.split("\n").map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
-  const mapped = lines.map(parseBatchLine);
-  const validRows = mapped.filter(Boolean);
-  const skipped = mapped.length - validRows.length;
-  if (!validRows.length) {
-    setStatus(batchStatus, "No valid rows found.");
+
+  const rows = Array.from(batchRowsBody.querySelectorAll("tr"));
+  const nonEmptyRows = rows.filter((row) => !rowIsEmpty(row));
+  if (!nonEmptyRows.length) {
+    setStatus(batchStatus, "Add at least one event row.", "error");
     return;
   }
-  const { error } = await client.from("events").insert(validRows);
+
+  const inserts = [];
+  const invalidIndexes = [];
+  for (let i = 0; i < nonEmptyRows.length; i += 1) {
+    const row = nonEmptyRows[i];
+    const rowNumber = Number(row.querySelector(".batch-row-index")?.textContent || i + 1);
+    const { missingRequired, event_image_file, payload } = collectBatchRowPayload(row);
+    if (missingRequired) {
+      invalidIndexes.push(rowNumber);
+      continue;
+    }
+    if (event_image_file) {
+      try {
+        payload.event_image_url = await uploadEventImage(event_image_file, "batch");
+      } catch (uploadError) {
+        setStatus(batchStatus, `Image upload failed on row ${rowNumber}: ${uploadError.message}`, "error");
+        return;
+      }
+    }
+    inserts.push(payload);
+  }
+
+  if (invalidIndexes.length) {
+    setStatus(batchStatus, `Missing required fields on row(s): ${invalidIndexes.join(", ")}`, "error");
+    return;
+  }
+
+  const { error } = await client.from("events").insert(inserts);
   if (error) {
-    setStatus(batchStatus, error.message);
+    setStatus(batchStatus, error.message, "error");
     return;
   }
-  setStatus(batchStatus, `Inserted ${validRows.length} events. Skipped ${skipped} invalid line(s).`);
+
+  setStatus(batchStatus, `Save successful. Inserted ${inserts.length} event(s).`, "success");
   await loadEvents();
 }
 
@@ -622,8 +769,17 @@ editForm.addEventListener("submit", async (event) => {
 
 batchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const formData = new FormData(batchForm);
-  await batchInsert(formData.get("batch_rows") || "");
+  await batchInsertRows();
+});
+
+batchAddRowButton.addEventListener("click", () => addBatchRow());
+batchAddTenButton.addEventListener("click", () => {
+  for (let i = 0; i < 10; i += 1) addBatchRow();
+});
+batchFillFiftyButton.addEventListener("click", () => {
+  while (batchRowsBody.querySelectorAll("tr").length < MAX_BATCH_ROWS) {
+    addBatchRow();
+  }
 });
 
 inviteForm.addEventListener("submit", async (event) => {
@@ -710,6 +866,10 @@ newEventButton.addEventListener("click", (event) => {
   event.preventDefault();
   clearFormForNew();
 });
+
+if (batchRowsBody.querySelectorAll("tr").length === 0) {
+  addBatchRow();
+}
 
 client.auth.onAuthStateChange(async (_evt, session) => {
   setAuthUi(session);

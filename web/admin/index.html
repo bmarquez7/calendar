@@ -129,19 +129,41 @@
           </div>
           <div class="form-card" id="batch-section">
             <h2>Batch add events</h2>
-            <p class="small">
-              One event per line, pipe-separated:
-              <br />
-              title | description | location | type | area | date_start | date_end | languages | price_type | price_min | price_max | status | ticket_url | event_image_url
-            </p>
-            <p class="small">Date format: 2026-03-05T19:00</p>
+            <p class="small">Fill one row per event. You can add up to 50 rows and upload one image per row.</p>
             <form id="batch-form">
-              <textarea
-                name="batch_rows"
-                rows="10"
-                placeholder="Jazz Night | Live trio performance | Hemingway Bar | Music | Blloku (The Block) | 2026-03-05T19:00 | 2026-03-05T22:00 | en,sq | Paid | 1000 | 2500 | pending | https://example.com/tickets | https://example.com/poster.jpg"
-                required
-              ></textarea>
+              <div class="admin-bar" style="margin-bottom: 8px;">
+                <span class="badge" id="batch-row-count">1 / 50 rows</span>
+                <button type="button" class="secondary" id="batch-add-row">Add row</button>
+                <button type="button" class="secondary" id="batch-add-ten">Add 10 rows</button>
+                <button type="button" class="secondary" id="batch-fill-fifty">Fill to 50</button>
+              </div>
+              <div class="batch-grid-wrap">
+                <table class="table batch-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Title *</th>
+                      <th>Description *</th>
+                      <th>Location *</th>
+                      <th>Type *</th>
+                      <th>Area *</th>
+                      <th>Start *</th>
+                      <th>End *</th>
+                      <th>Languages *</th>
+                      <th>Price type *</th>
+                      <th>Min *</th>
+                      <th>Max *</th>
+                      <th>Currency *</th>
+                      <th>Status *</th>
+                      <th>Ticket URL *</th>
+                      <th>Image URL</th>
+                      <th>Image file</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="batch-rows"></tbody>
+                </table>
+              </div>
               <button type="submit">Batch insert</button>
               <div class="notice" id="batch-status" style="display:none;"></div>
             </form>

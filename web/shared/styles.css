@@ -532,6 +532,40 @@ section {
   font-weight: 600;
 }
 
+.batch-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.batch-table {
+  min-width: 2100px;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.batch-table th,
+.batch-table td {
+  padding: 8px;
+  vertical-align: top;
+}
+
+.batch-table input {
+  min-width: 130px;
+  padding: 8px 10px;
+}
+
+.batch-table .batch-description {
+  min-width: 220px;
+}
+
+.batch-table .batch-title,
+.batch-table .batch-location,
+.batch-table .batch-area,
+.batch-table .batch-type {
+  min-width: 170px;
+}
+
 .status-pill {
   padding: 4px 10px;
   border-radius: 999px;
