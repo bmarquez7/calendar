@@ -529,6 +529,19 @@ async function loadSettings() {
   settingsForm.featured_title_es.value = currentSettings.featured_title_es || "";
   settingsForm.featured_title_sq.value = currentSettings.featured_title_sq || "";
   settingsForm.featured_placeholder_image_url.value = currentSettings.featured_placeholder_image_url || "";
+  const theme = currentSettings.widget_theme || {};
+  settingsForm.theme_bg.value = theme.bg || "";
+  settingsForm.theme_surface.value = theme.surface || "";
+  settingsForm.theme_text.value = theme.text || "";
+  settingsForm.theme_muted.value = theme.muted || "";
+  settingsForm.theme_brand.value = theme.brand || "";
+  settingsForm.theme_border.value = theme.border || "";
+  settingsForm.theme_title_font.value = theme.titleFont || "";
+  settingsForm.theme_body_font.value = theme.bodyFont || "";
+  settingsForm.theme_hero_align.value = theme.heroAlign || "";
+  settingsForm.theme_featured_position.value = theme.featuredPosition || "";
+  settingsForm.theme_featured_cols_desktop.value = theme.featuredColsDesktop || "";
+  settingsForm.theme_featured_cols_mobile.value = theme.featuredColsMobile || "";
 }
 
 function updateBatchRowCount() {
@@ -854,6 +867,22 @@ settingsForm.addEventListener("submit", async (event) => {
     }
   }
 
+  const currentTheme = currentSettings.widget_theme || {};
+  const theme = {
+    bg: keepOrReplace("theme_bg", currentTheme.bg),
+    surface: keepOrReplace("theme_surface", currentTheme.surface),
+    text: keepOrReplace("theme_text", currentTheme.text),
+    muted: keepOrReplace("theme_muted", currentTheme.muted),
+    brand: keepOrReplace("theme_brand", currentTheme.brand),
+    border: keepOrReplace("theme_border", currentTheme.border),
+    titleFont: keepOrReplace("theme_title_font", currentTheme.titleFont),
+    bodyFont: keepOrReplace("theme_body_font", currentTheme.bodyFont),
+    heroAlign: keepOrReplace("theme_hero_align", currentTheme.heroAlign),
+    featuredPosition: keepOrReplace("theme_featured_position", currentTheme.featuredPosition),
+    featuredColsDesktop: keepOrReplace("theme_featured_cols_desktop", currentTheme.featuredColsDesktop),
+    featuredColsMobile: keepOrReplace("theme_featured_cols_mobile", currentTheme.featuredColsMobile)
+  };
+
   const payload = {
     id: 1,
     hero_title_en: keepOrReplace("hero_title_en", currentSettings.hero_title_en),
@@ -865,7 +894,8 @@ settingsForm.addEventListener("submit", async (event) => {
     featured_title_en: keepOrReplace("featured_title_en", currentSettings.featured_title_en),
     featured_title_es: keepOrReplace("featured_title_es", currentSettings.featured_title_es),
     featured_title_sq: keepOrReplace("featured_title_sq", currentSettings.featured_title_sq),
-    featured_placeholder_image_url: featuredPlaceholderImageUrl
+    featured_placeholder_image_url: featuredPlaceholderImageUrl,
+    widget_theme: theme
   };
   const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
   if (error) {

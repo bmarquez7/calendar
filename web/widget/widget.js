@@ -100,6 +100,8 @@ const featuredGrid = document.getElementById("featured-grid");
 const featuredTitle = document.getElementById("featured-title");
 const resultsCount = document.getElementById("results-count");
 const resetFilters = document.getElementById("reset-filters");
+const heroSection = document.querySelector(".hero");
+const featuredBox = document.querySelector(".featured-box");
 const languageButton = document.getElementById("language-button");
 const languageMenu = document.getElementById("language-menu");
 const viewControls = document.getElementById("view-controls");
@@ -118,6 +120,35 @@ function pickText(row, base) {
 function pickSetting(base, fallback) {
   if (!state.settings) return fallback;
   return state.settings[`${base}_${state.uiLang}`] || state.settings[`${base}_en`] || fallback;
+}
+
+function applyTheme() {
+  const theme = state.settings?.widget_theme || {};
+  const root = document.documentElement;
+  if (theme.bg) root.style.setProperty("--bg", theme.bg);
+  if (theme.surface) {
+    root.style.setProperty("--surface", theme.surface);
+    root.style.setProperty("--surface-2", theme.surface);
+  }
+  if (theme.text) root.style.setProperty("--ink", theme.text);
+  if (theme.muted) root.style.setProperty("--muted", theme.muted);
+  if (theme.brand) {
+    root.style.setProperty("--brand", theme.brand);
+    root.style.setProperty("--brand-dark", theme.brand);
+  }
+  if (theme.border) root.style.setProperty("--border", theme.border);
+  if (theme.titleFont) root.style.setProperty("--font-title", theme.titleFont);
+  if (theme.bodyFont) root.style.setProperty("--font-body", theme.bodyFont);
+  if (theme.featuredColsDesktop) root.style.setProperty("--featured-cols-desktop", String(theme.featuredColsDesktop));
+  if (theme.featuredColsMobile) root.style.setProperty("--featured-cols-mobile", String(theme.featuredColsMobile));
+
+  heroSection.classList.toggle("align-left", theme.heroAlign === "left");
+  if (theme.featuredPosition === "below_filters") {
+    heroSection.appendChild(featuredBox);
+  } else {
+    const controls = document.getElementById("filter-controls");
+    controls.insertAdjacentElement("afterend", featuredBox);
+  }
 }
 
 function formatDateRange(start, end) {
@@ -593,6 +624,7 @@ async function loadEvents() {
 async function loadSettings() {
   const { data } = await client.from("site_settings").select("*").eq("id", 1).maybeSingle();
   state.settings = data || null;
+  applyTheme();
   syncUiCopy();
   render();
 }

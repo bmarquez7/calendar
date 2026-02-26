@@ -13,6 +13,8 @@
   --radius-sm: 10px;
   --font-title: "Playfair Display", "Times New Roman", serif;
   --font-body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+  --featured-cols-desktop: 5;
+  --featured-cols-mobile: 2;
 }
 
 * {
@@ -85,6 +87,13 @@ body {
   margin-right: auto;
 }
 
+.hero.align-left h1,
+.hero.align-left p {
+  text-align: left;
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .controls {
   margin-top: 20px;
   display: grid;
@@ -139,7 +148,7 @@ body {
 .featured-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--featured-cols-desktop), minmax(0, 1fr));
 }
 
 .featured-item {
@@ -356,6 +365,10 @@ section {
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 12px;
+}
+
+.center-text {
+  text-align: center;
 }
 
 .task-card {
@@ -606,7 +619,7 @@ section {
   }
 
   .featured-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--featured-cols-mobile), minmax(0, 1fr));
   }
 
   .admin-bar {

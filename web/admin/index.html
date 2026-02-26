@@ -37,7 +37,7 @@
       <section id="admin-tools">
         <section id="task-hub">
           <div class="form-card">
-            <h2>Admin Tasks</h2>
+            <h2 class="center-text">Admin Tasks</h2>
             <p class="small">Select a task box to open that task on its own page.</p>
             <div class="task-grid">
               <button class="task-card" data-open-page="event-queue-page" data-min-role="moderator">Review event queue</button>
@@ -225,6 +225,39 @@
               <input name="featured_title_sq" placeholder="Highlighted title (Albanian)" />
               <input name="featured_placeholder_image_url" placeholder="Highlighted empty-slot placeholder image URL" />
               <input type="file" name="featured_placeholder_image_file" accept="image/*" />
+              <h3>Widget style designer</h3>
+              <div class="grid-two">
+                <input name="theme_bg" placeholder="Background color (e.g. #f6f2ea)" />
+                <input name="theme_surface" placeholder="Card/surface color (e.g. #ffffff)" />
+              </div>
+              <div class="grid-two">
+                <input name="theme_text" placeholder="Main text color" />
+                <input name="theme_muted" placeholder="Muted text color" />
+              </div>
+              <div class="grid-two">
+                <input name="theme_brand" placeholder="Primary button/accent color" />
+                <input name="theme_border" placeholder="Border color" />
+              </div>
+              <div class="grid-two">
+                <input name="theme_title_font" placeholder="Title font family (e.g. Playfair Display, serif)" />
+                <input name="theme_body_font" placeholder="Body font family (e.g. Source Sans 3, sans-serif)" />
+              </div>
+              <div class="grid-two">
+                <select name="theme_hero_align">
+                  <option value="">Hero alignment (default center)</option>
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                </select>
+                <select name="theme_featured_position">
+                  <option value="">Featured position (default top)</option>
+                  <option value="top">Top</option>
+                  <option value="below_filters">Below filters</option>
+                </select>
+              </div>
+              <div class="grid-two">
+                <input type="number" min="1" max="6" name="theme_featured_cols_desktop" placeholder="Featured columns desktop (1-6)" />
+                <input type="number" min="1" max="3" name="theme_featured_cols_mobile" placeholder="Featured columns mobile (1-3)" />
+              </div>
               <button type="submit">Save page settings</button>
               <div class="notice" id="settings-status" style="display:none;"></div>
             </form>
