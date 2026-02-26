@@ -36,6 +36,7 @@ const resetForm = document.getElementById("reset-form");
 const settingsSection = document.getElementById("settings-section");
 const settingsForm = document.getElementById("settings-form");
 const settingsStatus = document.getElementById("settings-status");
+const textSettingKey = document.getElementById("text-setting-key");
 const taskHub = document.getElementById("task-hub");
 const taskPages = Array.from(document.querySelectorAll(".task-page"));
 const taskButtons = Array.from(document.querySelectorAll("[data-open-page]"));
@@ -48,6 +49,7 @@ let accessToken = null;
 let activeTaskPage = null;
 let settingsLoaded = false;
 let currentSettings = { id: 1 };
+let activeTextKey = "hero_title";
 const MAX_BATCH_ROWS = 50;
 
 const ROLE_RANK = {
@@ -519,15 +521,8 @@ async function loadSettings() {
   }
   currentSettings = data || { id: 1 };
   settingsLoaded = true;
-  settingsForm.hero_title_en.value = currentSettings.hero_title_en || "";
-  settingsForm.hero_title_es.value = currentSettings.hero_title_es || "";
-  settingsForm.hero_title_sq.value = currentSettings.hero_title_sq || "";
-  settingsForm.hero_subtitle_en.value = currentSettings.hero_subtitle_en || "";
-  settingsForm.hero_subtitle_es.value = currentSettings.hero_subtitle_es || "";
-  settingsForm.hero_subtitle_sq.value = currentSettings.hero_subtitle_sq || "";
-  settingsForm.featured_title_en.value = currentSettings.featured_title_en || "";
-  settingsForm.featured_title_es.value = currentSettings.featured_title_es || "";
-  settingsForm.featured_title_sq.value = currentSettings.featured_title_sq || "";
+  activeTextKey = textSettingKey.value || "hero_title";
+  loadTextInputsFromSettings(activeTextKey);
   settingsForm.featured_placeholder_image_url.value = currentSettings.featured_placeholder_image_url || "";
   const theme = currentSettings.widget_theme || {};
   settingsForm.theme_bg.value = theme.bg || "";
@@ -542,6 +537,18 @@ async function loadSettings() {
   settingsForm.theme_featured_position.value = theme.featuredPosition || "";
   settingsForm.theme_featured_cols_desktop.value = theme.featuredColsDesktop || "";
   settingsForm.theme_featured_cols_mobile.value = theme.featuredColsMobile || "";
+}
+
+function loadTextInputsFromSettings(baseKey) {
+  settingsForm.text_value_en.value = currentSettings[`${baseKey}_en`] || "";
+  settingsForm.text_value_es.value = currentSettings[`${baseKey}_es`] || "";
+  settingsForm.text_value_sq.value = currentSettings[`${baseKey}_sq`] || "";
+}
+
+function saveTextInputsToSettings(baseKey) {
+  currentSettings[`${baseKey}_en`] = settingsForm.text_value_en.value || null;
+  currentSettings[`${baseKey}_es`] = settingsForm.text_value_es.value || null;
+  currentSettings[`${baseKey}_sq`] = settingsForm.text_value_sq.value || null;
 }
 
 function updateBatchRowCount() {
@@ -839,6 +846,23 @@ resetForm.addEventListener("submit", async (event) => {
   }
 });
 
+textSettingKey.addEventListener("change", () => {
+  if (!settingsLoaded) return;
+  saveTextInputsToSettings(activeTextKey);
+  activeTextKey = textSettingKey.value;
+  loadTextInputsFromSettings(activeTextKey);
+});
+
+document.querySelectorAll(".hex-swatch").forEach((swatch) => {
+  swatch.addEventListener("click", () => {
+    const target = swatch.dataset.colorTarget;
+    const color = swatch.dataset.color;
+    if (!target || !color) return;
+    const input = settingsForm.querySelector(`[name='${target}']`);
+    if (input) input.value = color;
+  });
+});
+
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!hasRole("owner")) {
@@ -850,6 +874,7 @@ settingsForm.addEventListener("submit", async (event) => {
     return;
   }
   const formData = new FormData(settingsForm);
+  saveTextInputsToSettings(activeTextKey);
   const keepOrReplace = (name, fallback) => {
     const value = String(formData.get(name) || "").trim();
     return value || fallback || null;
@@ -885,15 +910,15 @@ settingsForm.addEventListener("submit", async (event) => {
 
   const payload = {
     id: 1,
-    hero_title_en: keepOrReplace("hero_title_en", currentSettings.hero_title_en),
-    hero_title_es: keepOrReplace("hero_title_es", currentSettings.hero_title_es),
-    hero_title_sq: keepOrReplace("hero_title_sq", currentSettings.hero_title_sq),
-    hero_subtitle_en: keepOrReplace("hero_subtitle_en", currentSettings.hero_subtitle_en),
-    hero_subtitle_es: keepOrReplace("hero_subtitle_es", currentSettings.hero_subtitle_es),
-    hero_subtitle_sq: keepOrReplace("hero_subtitle_sq", currentSettings.hero_subtitle_sq),
-    featured_title_en: keepOrReplace("featured_title_en", currentSettings.featured_title_en),
-    featured_title_es: keepOrReplace("featured_title_es", currentSettings.featured_title_es),
-    featured_title_sq: keepOrReplace("featured_title_sq", currentSettings.featured_title_sq),
+    hero_title_en: currentSettings.hero_title_en || null,
+    hero_title_es: currentSettings.hero_title_es || null,
+    hero_title_sq: currentSettings.hero_title_sq || null,
+    hero_subtitle_en: currentSettings.hero_subtitle_en || null,
+    hero_subtitle_es: currentSettings.hero_subtitle_es || null,
+    hero_subtitle_sq: currentSettings.hero_subtitle_sq || null,
+    featured_title_en: currentSettings.featured_title_en || null,
+    featured_title_es: currentSettings.featured_title_es || null,
+    featured_title_sq: currentSettings.featured_title_sq || null,
     featured_placeholder_image_url: featuredPlaceholderImageUrl,
     widget_theme: theme
   };

@@ -345,6 +345,26 @@ section {
   color: var(--muted);
 }
 
+.lang-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hex-palette {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.hex-swatch {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+}
+
 .notice {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -646,5 +666,9 @@ section {
 
   .hero-actions {
     justify-items: stretch;
+  }
+
+  .lang-row {
+    grid-template-columns: 1fr;
   }
 }

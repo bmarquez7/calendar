@@ -214,29 +214,42 @@
             <h2>Page settings</h2>
             <p class="small">Customize widget title, subtitle, and highlighted section title per language.</p>
             <form id="settings-form">
-              <input name="hero_title_en" placeholder="Hero title (English)" />
-              <input name="hero_title_es" placeholder="Hero title (Spanish)" />
-              <input name="hero_title_sq" placeholder="Hero title (Albanian)" />
-              <textarea name="hero_subtitle_en" placeholder="Hero subtitle (English)"></textarea>
-              <textarea name="hero_subtitle_es" placeholder="Hero subtitle (Spanish)"></textarea>
-              <textarea name="hero_subtitle_sq" placeholder="Hero subtitle (Albanian)"></textarea>
-              <input name="featured_title_en" placeholder="Highlighted title (English)" />
-              <input name="featured_title_es" placeholder="Highlighted title (Spanish)" />
-              <input name="featured_title_sq" placeholder="Highlighted title (Albanian)" />
+              <h3>Text customization</h3>
+              <div class="grid-two">
+                <select id="text-setting-key">
+                  <option value="hero_title">Hero title</option>
+                  <option value="hero_subtitle">Hero subtitle</option>
+                  <option value="featured_title">Highlighted section title</option>
+                </select>
+                <div></div>
+              </div>
+              <div class="lang-row">
+                <input name="text_value_en" placeholder="English" />
+                <input name="text_value_es" placeholder="Spanish" />
+                <input name="text_value_sq" placeholder="Albanian" />
+              </div>
               <input name="featured_placeholder_image_url" placeholder="Highlighted empty-slot placeholder image URL" />
               <input type="file" name="featured_placeholder_image_file" accept="image/*" />
               <h3>Widget style designer</h3>
               <div class="grid-two">
-                <input name="theme_bg" placeholder="Background color (e.g. #f6f2ea)" />
-                <input name="theme_surface" placeholder="Card/surface color (e.g. #ffffff)" />
+                <input name="theme_bg" type="color" />
+                <input name="theme_surface" type="color" />
               </div>
               <div class="grid-two">
-                <input name="theme_text" placeholder="Main text color" />
-                <input name="theme_muted" placeholder="Muted text color" />
+                <input name="theme_text" type="color" />
+                <input name="theme_muted" type="color" />
               </div>
               <div class="grid-two">
-                <input name="theme_brand" placeholder="Primary button/accent color" />
-                <input name="theme_border" placeholder="Border color" />
+                <input name="theme_brand" type="color" />
+                <input name="theme_border" type="color" />
+              </div>
+              <div class="hex-palette">
+                <button type="button" class="hex-swatch" data-color-target="theme_bg" data-color="#f6f2ea" style="background:#f6f2ea;">#f6f2ea</button>
+                <button type="button" class="hex-swatch" data-color-target="theme_surface" data-color="#ffffff" style="background:#ffffff;">#ffffff</button>
+                <button type="button" class="hex-swatch" data-color-target="theme_text" data-color="#1f1a14" style="background:#1f1a14;color:#fff;">#1f1a14</button>
+                <button type="button" class="hex-swatch" data-color-target="theme_muted" data-color="#5c5248" style="background:#5c5248;color:#fff;">#5c5248</button>
+                <button type="button" class="hex-swatch" data-color-target="theme_brand" data-color="#c8652a" style="background:#c8652a;color:#fff;">#c8652a</button>
+                <button type="button" class="hex-swatch" data-color-target="theme_border" data-color="#e0d7c6" style="background:#e0d7c6;">#e0d7c6</button>
               </div>
               <div class="grid-two">
                 <input name="theme_title_font" placeholder="Title font family (e.g. Playfair Display, serif)" />
