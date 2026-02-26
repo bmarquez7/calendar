@@ -8,7 +8,7 @@ const state = {
   events: [],
   settings: null,
   uiLang: DEFAULT_UI_LANG,
-  viewMode: "list",
+  viewMode: "month",
   calendarDate: new Date(),
   weekStart: null,
   filters: {
@@ -586,6 +586,9 @@ function render() {
   const events = filterEvents();
   renderEvents();
   renderFeatured();
+  [...viewControls.querySelectorAll("button[data-view]")].forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === state.viewMode);
+  });
   const showCalendar = state.viewMode !== "list";
   calendarView.classList.toggle("hidden", !showCalendar);
   eventList.classList.toggle("hidden", showCalendar);
