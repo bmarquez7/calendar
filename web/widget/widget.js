@@ -171,6 +171,27 @@ function formatPrice(row) {
   return `${min || max} ${row.currency || "ALL"}`;
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function safeUrl(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+  if (input.startsWith("/")) return input;
+  try {
+    const url = new URL(input);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function openModal(html) {
   modalBody.innerHTML = html;
   eventModal.classList.remove("hidden");
@@ -182,17 +203,19 @@ function closeModal() {
 }
 
 function eventDetailHtml(event) {
-  const title = pickText(event, "title") || "Untitled";
-  const description = pickText(event, "description") || "";
-  const location = pickText(event, "location") || event.area || "";
+  const title = escapeHtml(pickText(event, "title") || "Untitled");
+  const description = escapeHtml(pickText(event, "description") || "");
+  const location = escapeHtml(pickText(event, "location") || event.area || "");
   const date = formatDateRange(event.date_start, event.date_end);
-  const languages = (event.event_language || []).join(", ");
-  const price = formatPrice(event);
-  const link = event.ticket_url
-    ? `<p><a href="${event.ticket_url}" target="_blank" rel="noreferrer">Tickets / RSVP</a></p>`
+  const languages = escapeHtml((event.event_language || []).join(", "));
+  const price = escapeHtml(formatPrice(event));
+  const ticketUrl = safeUrl(event.ticket_url);
+  const link = ticketUrl
+    ? `<p><a href="${ticketUrl}" target="_blank" rel="noreferrer">Tickets / RSVP</a></p>`
     : "";
-  const image = event.event_image_url
-    ? `<img class="modal-poster" src="${event.event_image_url}" alt="${title}" loading="lazy" />`
+  const imageUrl = safeUrl(event.event_image_url);
+  const image = imageUrl
+    ? `<img class="modal-poster" src="${imageUrl}" alt="${title}" loading="lazy" />`
     : "";
 
   return `
@@ -213,7 +236,7 @@ function eventDetailHtml(event) {
 function openDayModal(date, events) {
   const dayLabel = date.toLocaleDateString(state.uiLang, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   if (!events.length) {
-    openModal(`<h3 id="modal-title">${dayLabel}</h3><p>No events for this day.</p>`);
+    openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3><p>No events for this day.</p>`);
     return;
   }
 
@@ -221,16 +244,16 @@ function openDayModal(date, events) {
     .map(
       (event) => `
       <div class="modal-event" data-event-id="${event.id}">
-        <h4>${pickText(event, "title") || "Untitled"}</h4>
-        ${event.event_image_url ? `<img class="modal-poster" src="${event.event_image_url}" alt="${pickText(event, "title") || "Event"}" loading="lazy" />` : ""}
-        <p>${formatDateRange(event.date_start, event.date_end)}</p>
-        <p>${pickText(event, "location") || event.area || ""}</p>
+        <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
+        ${safeUrl(event.event_image_url) ? `<img class="modal-poster" src="${safeUrl(event.event_image_url)}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
+        <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
+        <p>${escapeHtml(pickText(event, "location") || event.area || "")}</p>
       </div>
     `
     )
     .join("");
 
-  openModal(`<h3 id="modal-title">${dayLabel}</h3>${items}`);
+  openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3>${items}`);
   modalBody.querySelectorAll(".modal-event").forEach((el) => {
     el.addEventListener("click", () => {
       const target = events.find((evt) => String(evt.id) === el.dataset.eventId);
@@ -361,26 +384,28 @@ function renderEvents() {
     const desc = document.createElement("p");
     desc.textContent = pickText(event, "description");
     const image = document.createElement("img");
-    if (event.event_image_url) {
+    const eventImageUrl = safeUrl(event.event_image_url);
+    if (eventImageUrl) {
       image.className = "event-poster";
-      image.src = event.event_image_url;
+      image.src = eventImageUrl;
       image.alt = pickText(event, "title") || "Event";
       image.loading = "lazy";
     }
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.innerHTML = `
-      <span>📍 ${pickText(event, "location") || event.area}</span>
-      <span>🗓️ ${formatDateRange(event.date_start, event.date_end)}</span>
-      <span>🏷️ ${event.event_type}</span>
-      <span>💬 ${(event.event_language || []).join(", ")}</span>
-      <span>💰 ${formatPrice(event)}</span>
+      <span>📍 ${escapeHtml(pickText(event, "location") || event.area)}</span>
+      <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end))}</span>
+      <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
+      <span>💬 ${escapeHtml((event.event_language || []).join(", "))}</span>
+      <span>💰 ${escapeHtml(formatPrice(event))}</span>
     `;
 
     const actions = document.createElement("div");
-    if (event.ticket_url) {
+    const ticketUrl = safeUrl(event.ticket_url);
+    if (ticketUrl) {
       const link = document.createElement("a");
-      link.href = event.ticket_url;
+      link.href = ticketUrl;
       link.target = "_blank";
       link.rel = "noreferrer";
       link.textContent = "Tickets / RSVP";
@@ -417,9 +442,10 @@ function renderFeatured() {
     box.className = "featured-item";
     if (!event) {
       box.classList.add("featured-item-empty");
-      if (placeholderImage) {
+      const placeholderImageUrl = safeUrl(placeholderImage);
+      if (placeholderImageUrl) {
         box.classList.add("featured-item-empty-image");
-        box.innerHTML = `<img class="featured-placeholder-image" src="${placeholderImage}" alt="More events coming soon" loading="lazy" />`;
+        box.innerHTML = `<img class="featured-placeholder-image" src="${placeholderImageUrl}" alt="More events coming soon" loading="lazy" />`;
       } else {
         box.innerHTML = "<h4>No event</h4><p>Coming soon</p><p></p>";
       }
@@ -427,9 +453,9 @@ function renderFeatured() {
       return;
     }
     box.innerHTML = `
-      <h4>${pickText(event, "title") || "Untitled"}</h4>
-      <p>${formatDateRange(event.date_start, event.date_end)}</p>
-      <p>${pickText(event, "location") || event.area || ""}</p>
+      <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
+      <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
+      <p>${escapeHtml(pickText(event, "location") || event.area || "")}</p>
     `;
     box.addEventListener("click", () => openModal(eventDetailHtml(event)));
     featuredGrid.appendChild(box);
@@ -554,6 +580,8 @@ function renderCalendarWeek(events) {
   nav.append(prev, next);
   header.append(title, nav);
 
+  const scroll = document.createElement("div");
+  scroll.className = "calendar-week-scroll";
   const grid = document.createElement("div");
   grid.className = "calendar-week";
   for (let i = 0; i < 7; i += 1) {
@@ -578,7 +606,8 @@ function renderCalendarWeek(events) {
     grid.appendChild(day);
   }
 
-  wrapper.append(header, grid);
+  scroll.appendChild(grid);
+  wrapper.append(header, scroll);
   calendarView.appendChild(wrapper);
 }
 
