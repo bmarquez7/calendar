@@ -46,6 +46,8 @@ let selectedId = null;
 let currentRole = null;
 let accessToken = null;
 let activeTaskPage = null;
+let settingsLoaded = false;
+let currentSettings = { id: 1 };
 const MAX_BATCH_ROWS = 50;
 
 const ROLE_RANK = {
@@ -511,20 +513,22 @@ async function loadSettings() {
   if (!hasRole("owner")) return;
   const { data, error } = await client.from("site_settings").select("*").eq("id", 1).maybeSingle();
   if (error) {
-    setStatus(settingsStatus, `Settings load failed: ${error.message}`);
+    setStatus(settingsStatus, `Settings load failed: ${error.message}`, "error");
+    settingsLoaded = false;
     return;
   }
-  if (!data) return;
-  settingsForm.hero_title_en.value = data.hero_title_en || "";
-  settingsForm.hero_title_es.value = data.hero_title_es || "";
-  settingsForm.hero_title_sq.value = data.hero_title_sq || "";
-  settingsForm.hero_subtitle_en.value = data.hero_subtitle_en || "";
-  settingsForm.hero_subtitle_es.value = data.hero_subtitle_es || "";
-  settingsForm.hero_subtitle_sq.value = data.hero_subtitle_sq || "";
-  settingsForm.featured_title_en.value = data.featured_title_en || "";
-  settingsForm.featured_title_es.value = data.featured_title_es || "";
-  settingsForm.featured_title_sq.value = data.featured_title_sq || "";
-  settingsForm.featured_placeholder_image_url.value = data.featured_placeholder_image_url || "";
+  currentSettings = data || { id: 1 };
+  settingsLoaded = true;
+  settingsForm.hero_title_en.value = currentSettings.hero_title_en || "";
+  settingsForm.hero_title_es.value = currentSettings.hero_title_es || "";
+  settingsForm.hero_title_sq.value = currentSettings.hero_title_sq || "";
+  settingsForm.hero_subtitle_en.value = currentSettings.hero_subtitle_en || "";
+  settingsForm.hero_subtitle_es.value = currentSettings.hero_subtitle_es || "";
+  settingsForm.hero_subtitle_sq.value = currentSettings.hero_subtitle_sq || "";
+  settingsForm.featured_title_en.value = currentSettings.featured_title_en || "";
+  settingsForm.featured_title_es.value = currentSettings.featured_title_es || "";
+  settingsForm.featured_title_sq.value = currentSettings.featured_title_sq || "";
+  settingsForm.featured_placeholder_image_url.value = currentSettings.featured_placeholder_image_url || "";
 }
 
 function updateBatchRowCount() {
@@ -561,7 +565,7 @@ function addBatchRow(prefill = {}) {
   row.appendChild(createBatchCell("number", "batch-price-min", "0", true));
   row.appendChild(createBatchCell("number", "batch-price-max", "0", true));
   row.appendChild(createBatchCell("text", "batch-currency", "ALL", true));
-  row.appendChild(createBatchCell("text", "batch-status", "pending", true));
+  row.appendChild(createBatchCell("text", "batch-status", "approved", true));
   row.appendChild(createBatchCell("url", "batch-ticket-url", "https://...", true));
   row.appendChild(createBatchCell("url", "batch-image-url", "https://...", false));
 
@@ -599,7 +603,7 @@ function addBatchRow(prefill = {}) {
   row.querySelector(".batch-price-min").value = prefill.price_min || "0";
   row.querySelector(".batch-price-max").value = prefill.price_max || "0";
   row.querySelector(".batch-currency").value = prefill.currency || "ALL";
-  row.querySelector(".batch-status").value = prefill.status || "pending";
+  row.querySelector(".batch-status").value = prefill.status || "approved";
   row.querySelector(".batch-ticket-url").value = prefill.ticket_url || "";
   row.querySelector(".batch-image-url").value = prefill.event_image_url || "";
 
@@ -828,37 +832,47 @@ settingsForm.addEventListener("submit", async (event) => {
     setStatus(settingsStatus, "Owner required.");
     return;
   }
+  if (!settingsLoaded) {
+    setStatus(settingsStatus, "Settings not loaded yet. Refresh and try again.", "error");
+    return;
+  }
   const formData = new FormData(settingsForm);
-  let featuredPlaceholderImageUrl = formData.get("featured_placeholder_image_url") || null;
+  const keepOrReplace = (name, fallback) => {
+    const value = String(formData.get(name) || "").trim();
+    return value || fallback || null;
+  };
+
+  let featuredPlaceholderImageUrl = keepOrReplace("featured_placeholder_image_url", currentSettings.featured_placeholder_image_url);
   const selectedPlaceholderFile = formData.get("featured_placeholder_image_file");
 
   if (selectedPlaceholderFile && selectedPlaceholderFile.size > 0) {
     try {
       featuredPlaceholderImageUrl = await uploadEventImage(selectedPlaceholderFile, "settings");
     } catch (uploadError) {
-      setStatus(settingsStatus, `Placeholder image upload failed: ${uploadError.message}`);
+      setStatus(settingsStatus, `Placeholder image upload failed: ${uploadError.message}`, "error");
       return;
     }
   }
 
   const payload = {
     id: 1,
-    hero_title_en: formData.get("hero_title_en") || null,
-    hero_title_es: formData.get("hero_title_es") || null,
-    hero_title_sq: formData.get("hero_title_sq") || null,
-    hero_subtitle_en: formData.get("hero_subtitle_en") || null,
-    hero_subtitle_es: formData.get("hero_subtitle_es") || null,
-    hero_subtitle_sq: formData.get("hero_subtitle_sq") || null,
-    featured_title_en: formData.get("featured_title_en") || null,
-    featured_title_es: formData.get("featured_title_es") || null,
-    featured_title_sq: formData.get("featured_title_sq") || null,
+    hero_title_en: keepOrReplace("hero_title_en", currentSettings.hero_title_en),
+    hero_title_es: keepOrReplace("hero_title_es", currentSettings.hero_title_es),
+    hero_title_sq: keepOrReplace("hero_title_sq", currentSettings.hero_title_sq),
+    hero_subtitle_en: keepOrReplace("hero_subtitle_en", currentSettings.hero_subtitle_en),
+    hero_subtitle_es: keepOrReplace("hero_subtitle_es", currentSettings.hero_subtitle_es),
+    hero_subtitle_sq: keepOrReplace("hero_subtitle_sq", currentSettings.hero_subtitle_sq),
+    featured_title_en: keepOrReplace("featured_title_en", currentSettings.featured_title_en),
+    featured_title_es: keepOrReplace("featured_title_es", currentSettings.featured_title_es),
+    featured_title_sq: keepOrReplace("featured_title_sq", currentSettings.featured_title_sq),
     featured_placeholder_image_url: featuredPlaceholderImageUrl
   };
   const { error } = await client.from("site_settings").upsert(payload, { onConflict: "id" });
   if (error) {
-    setStatus(settingsStatus, error.message);
+    setStatus(settingsStatus, error.message, "error");
     return;
   }
+  currentSettings = { ...currentSettings, ...payload };
   setStatus(settingsStatus, "Save successful.", "success");
 });
 
