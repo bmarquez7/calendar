@@ -502,18 +502,19 @@ section {
 
 .calendar-week {
   display: grid;
-  grid-template-columns: repeat(7, minmax(180px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
 }
 
 .calendar-week-scroll {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .calendar-week-day {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px;
+  min-height: 110px;
   background: var(--surface-2);
   display: grid;
   gap: 8px;
