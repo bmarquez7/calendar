@@ -98,6 +98,10 @@ app.get("/widget/", async (_, reply) => {
   return reply.sendFile("widget/index.html");
 });
 
+app.get("/widget/submit/", async (_, reply) => {
+  return reply.sendFile("widget/submit/index.html");
+});
+
 app.get("/admin/", async (_, reply) => {
   return reply.sendFile("admin/index.html");
 });

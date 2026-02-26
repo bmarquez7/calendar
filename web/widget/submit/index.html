@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Submit Events</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../shared/styles.css" />
+  </head>
+  <body>
+    <div class="app widget-app">
+      <section class="hero">
+        <div class="admin-bar" style="margin-bottom: 12px;">
+          <a class="button-link" href="/widget/">Back to calendar</a>
+        </div>
+        <h1>Submit Events (Batch)</h1>
+        <p>Submit up to 10 events at once. All submissions are marked pending and require admin approval.</p>
+      </section>
+
+      <section class="form-card" style="margin-top: 18px;">
+        <h2>Submitter details</h2>
+        <div class="grid-two">
+          <input id="submitter-name" type="text" placeholder="Your name" required />
+          <input id="submitter-email" type="email" placeholder="Your email" required />
+        </div>
+        <div class="grid-two">
+          <input id="organizer-name" type="text" placeholder="Organizer name" required />
+          <input id="organizer-email" type="email" placeholder="Organizer email" required />
+        </div>
+        <textarea id="submitter-note" placeholder="Note for admin" required></textarea>
+      </section>
+
+      <section class="form-card" style="margin-top: 16px;">
+        <div class="admin-bar" style="margin-bottom: 10px;">
+          <span class="badge" id="public-batch-count">1 / 10 rows</span>
+          <button type="button" class="secondary" id="public-batch-add">Add row</button>
+          <button type="button" class="secondary" id="public-batch-fill">Fill to 10</button>
+        </div>
+        <div class="batch-grid-wrap">
+          <table class="table batch-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Title *</th>
+                <th>Description *</th>
+                <th>Location *</th>
+                <th>Type *</th>
+                <th>Area *</th>
+                <th>Start *</th>
+                <th>End *</th>
+                <th>Languages *</th>
+                <th>Price type *</th>
+                <th>Min *</th>
+                <th>Max *</th>
+                <th>Currency *</th>
+                <th>Ticket URL *</th>
+                <th>Image URL</th>
+                <th>Image file</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="public-batch-rows"></tbody>
+          </table>
+        </div>
+        <div class="admin-bar" style="margin-top: 12px;">
+          <button id="public-batch-submit" type="button">Submit for approval</button>
+        </div>
+        <div class="notice" id="public-batch-status" style="display:none;"></div>
+      </section>
+    </div>
+    <script type="module" src="../../shared/vendor.js"></script>
+    <script type="module" src="./submit.js"></script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 import { createClient } from "../shared/vendor.js";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, DEFAULT_UI_LANG, EVENT_IMAGE_BUCKET } from "../shared/config.js";
-import { EVENT_TYPES, PRICE_TYPES, AREAS, LANGS } from "../shared/constants.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, DEFAULT_UI_LANG } from "../shared/config.js";
+import { EVENT_TYPES, AREAS, LANGS } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -100,15 +100,10 @@ const featuredGrid = document.getElementById("featured-grid");
 const featuredTitle = document.getElementById("featured-title");
 const resultsCount = document.getElementById("results-count");
 const resetFilters = document.getElementById("reset-filters");
-const submitForm = document.getElementById("submit-form");
-const submitStatus = document.getElementById("submit-status");
 const languageButton = document.getElementById("language-button");
 const languageMenu = document.getElementById("language-menu");
 const viewControls = document.getElementById("view-controls");
 const calendarView = document.getElementById("calendar-view");
-const repeatFrequencyInput = submitForm.querySelector("select[name='repeat_frequency']");
-const repeatUntilInput = submitForm.querySelector("input[name='repeat_until']");
-repeatUntilInput.required = false;
 const eventModal = document.getElementById("event-modal");
 const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
@@ -213,22 +208,6 @@ function openDayModal(date, events) {
   });
 }
 
-function sanitizeFilename(name) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
-async function uploadEventImage(file, folder) {
-  const safeName = sanitizeFilename(file.name || "poster.jpg");
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
-  const { error } = await client.storage.from(EVENT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
-    upsert: false
-  });
-  if (error) throw error;
-  const { data } = client.storage.from(EVENT_IMAGE_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
-}
-
 function toDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -248,44 +227,6 @@ function addDays(date, days) {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
-}
-
-function addByFrequency(date, frequency) {
-  const next = new Date(date);
-  if (frequency === "daily") next.setDate(next.getDate() + 1);
-  if (frequency === "weekly") next.setDate(next.getDate() + 7);
-  if (frequency === "monthly") next.setMonth(next.getMonth() + 1);
-  return next;
-}
-
-function buildRecurringRows(payload, repeatFrequency, repeatUntil) {
-  if (repeatFrequency === "none") return [payload];
-  if (!repeatUntil) return [];
-
-  const start = new Date(payload.date_start);
-  const end = new Date(payload.date_end);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
-  const durationMs = end.getTime() - start.getTime();
-  if (durationMs < 0) return [];
-
-  const until = new Date(`${repeatUntil}T23:59:59`);
-  if (Number.isNaN(until.getTime()) || until < start) return [];
-
-  const rows = [];
-  let currentStart = new Date(start);
-  let guard = 0;
-  while (currentStart <= until && guard < 500) {
-    const rowStart = new Date(currentStart);
-    const rowEnd = new Date(currentStart.getTime() + durationMs);
-    rows.push({
-      ...payload,
-      date_start: rowStart.toISOString(),
-      date_end: rowEnd.toISOString()
-    });
-    currentStart = addByFrequency(currentStart, repeatFrequency);
-    guard += 1;
-  }
-  return rows;
 }
 
 function createSelect(name, labelText, options, includeAny = true) {
@@ -629,8 +570,6 @@ function syncUiCopy() {
   document.getElementById("hero-title").textContent = pickSetting("hero_title", strings.title);
   document.getElementById("hero-subtitle").textContent = pickSetting("hero_subtitle", strings.subtitle);
   featuredTitle.textContent = pickSetting("featured_title", "Highlighted Events");
-  document.getElementById("submit-title").textContent = strings.submitTitle;
-  document.getElementById("submit-subtitle").textContent = strings.submitSubtitle;
   resetFilters.textContent = strings.reset;
   const currentLang = LANGS.find((lang) => lang.code === state.uiLang);
   languageButton.textContent = `Language: ${currentLang ? currentLang.label : "English"}`;
@@ -658,119 +597,6 @@ async function loadSettings() {
   render();
 }
 
-function hydrateFormOptions() {
-  const eventTypeSelect = submitForm.querySelector("select[name='event_type']");
-  EVENT_TYPES.forEach((type) => {
-    const opt = document.createElement("option");
-    opt.value = type;
-    opt.textContent = type;
-    eventTypeSelect.appendChild(opt);
-  });
-
-  const areaSelect = submitForm.querySelector("select[name='area']");
-  AREAS.forEach((area) => {
-    const opt = document.createElement("option");
-    opt.value = area;
-    opt.textContent = area;
-    areaSelect.appendChild(opt);
-  });
-
-  const languageSelect = submitForm.querySelector("select[name='event_language']");
-  LANGS.forEach((lang) => {
-    const opt = document.createElement("option");
-    opt.value = lang.code;
-    opt.textContent = lang.label;
-    languageSelect.appendChild(opt);
-  });
-
-  const priceSelect = submitForm.querySelector("select[name='price_type']");
-  PRICE_TYPES.forEach((type) => {
-    const opt = document.createElement("option");
-    opt.value = type;
-    opt.textContent = type;
-    priceSelect.appendChild(opt);
-  });
-}
-
-async function handleSubmit(event) {
-  event.preventDefault();
-  submitStatus.style.display = "none";
-  const formData = new FormData(submitForm);
-  const eventLanguage = formData.getAll("event_language");
-  const repeatFrequency = formData.get("repeat_frequency") || "none";
-  const repeatUntil = formData.get("repeat_until") || null;
-  const selectedFile = formData.get("event_image_file");
-  let eventImageUrl = formData.get("event_image_url") || null;
-
-  if (selectedFile && selectedFile.size > 0) {
-    try {
-      eventImageUrl = await uploadEventImage(selectedFile, "public-submissions");
-    } catch (uploadError) {
-      submitStatus.style.display = "block";
-      submitStatus.textContent = `Image upload failed: ${uploadError.message}`;
-      return;
-    }
-  }
-
-  const payload = {
-    status: "pending",
-    title_en: formData.get("title"),
-    description_en: formData.get("description"),
-    location_en: formData.get("location"),
-    event_type: formData.get("event_type"),
-    area: formData.get("area"),
-    event_language: eventLanguage,
-    date_start: formData.get("date_start"),
-    date_end: formData.get("date_end") || null,
-    price_type: formData.get("price_type"),
-    price_min: formData.get("price_min") || null,
-    price_max: formData.get("price_max") || null,
-    currency: "ALL",
-    ticket_url: formData.get("ticket_url") || null,
-    event_image_url: eventImageUrl,
-    organizer_name: formData.get("organizer_name") || null,
-    organizer_email: formData.get("organizer_email") || null,
-    submitter_name: formData.get("submitter_name") || null,
-    submitter_email: formData.get("submitter_email") || null,
-    submitter_note: formData.get("submitter_note") || null
-  };
-
-  if (!payload.title_en || !payload.description_en || !payload.location_en || !payload.date_start || !payload.date_end) {
-    submitStatus.style.display = "block";
-    submitStatus.textContent = "Please complete all required fields.";
-    return;
-  }
-  if (!eventLanguage.length) {
-    submitStatus.style.display = "block";
-    submitStatus.textContent = "Please select at least one event language.";
-    return;
-  }
-  if (repeatFrequency !== "none" && !repeatUntil) {
-    submitStatus.style.display = "block";
-    submitStatus.textContent = "Please set a repeat end date.";
-    return;
-  }
-
-  const rows = buildRecurringRows(payload, repeatFrequency, repeatUntil);
-  if (!rows.length) {
-    submitStatus.style.display = "block";
-    submitStatus.textContent = "Recurring settings are invalid. Check date range.";
-    return;
-  }
-
-  const { error } = await client.from("events").insert(rows);
-  if (error) {
-    submitStatus.style.display = "block";
-    submitStatus.textContent = "Sorry, something went wrong. Try again.";
-    console.error(error);
-    return;
-  }
-
-  submitForm.reset();
-  submitStatus.style.display = "block";
-  submitStatus.textContent = `Thanks! Submitted ${rows.length} event(s) for approval.`;
-}
-
 resetFilters.addEventListener("click", () => {
   state.filters = {
     search: "",
@@ -795,10 +621,6 @@ viewControls.addEventListener("click", (event) => {
   render();
 });
 
-submitForm.addEventListener("submit", handleSubmit);
-repeatFrequencyInput.addEventListener("change", () => {
-  repeatUntilInput.required = repeatFrequencyInput.value !== "none";
-});
 languageButton.addEventListener("click", () => {
   languageMenu.classList.toggle("hidden");
 });
@@ -835,7 +657,6 @@ document.addEventListener("keydown", (event) => {
 
 syncUiCopy();
 renderFilters();
-hydrateFormOptions();
 render();
 loadEvents();
 loadSettings();
