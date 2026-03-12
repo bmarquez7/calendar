@@ -1,9 +1,17 @@
 import { createClient } from "../../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET } from "../../shared/config.js";
+import { EVENT_TYPES, AREAS, LANGS } from "../../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ROWS = 10;
+const CURRENCY_OPTIONS = [
+  { value: "ALL", label: "ALL / LEK" },
+  { value: "EUR", label: "EURO" },
+  { value: "USD", label: "USD" }
+];
+const PRICE_TYPE_OPTIONS = ["Free", "Paid"];
+
 const rowsBody = document.getElementById("public-batch-rows");
 const rowCount = document.getElementById("public-batch-count");
 const addRowButton = document.getElementById("public-batch-add");
@@ -48,75 +56,165 @@ async function uploadImage(file) {
   return data.publicUrl;
 }
 
-function createCell(type, className, required = false, placeholder = "") {
-  const td = document.createElement("td");
+function createOptionElements(select, options) {
+  options.forEach((option) => {
+    const el = document.createElement("option");
+    if (typeof option === "string") {
+      el.value = option;
+      el.textContent = option;
+    } else {
+      el.value = option.value;
+      el.textContent = option.label;
+    }
+    select.appendChild(el);
+  });
+}
+
+function createField(labelText, input) {
+  const wrap = document.createElement("label");
+  wrap.className = "public-submit-field";
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = labelText;
+  wrap.append(label, input);
+  return wrap;
+}
+
+function createInput(type, className, placeholder = "", required = false) {
   const input = document.createElement("input");
   input.type = type;
   input.className = className;
-  if (required) input.required = true;
   if (placeholder) input.placeholder = placeholder;
-  td.appendChild(input);
-  return td;
+  if (required) input.required = true;
+  return input;
+}
+
+function createTextarea(className, placeholder = "", required = false) {
+  const textarea = document.createElement("textarea");
+  textarea.className = className;
+  textarea.placeholder = placeholder;
+  if (required) textarea.required = true;
+  return textarea;
+}
+
+function createSelect(className, options, required = false) {
+  const select = document.createElement("select");
+  select.className = className;
+  if (required) select.required = true;
+  createOptionElements(select, options);
+  return select;
 }
 
 function updateCount() {
-  rowCount.textContent = `${rowsBody.querySelectorAll("tr").length} / ${MAX_ROWS} rows`;
+  rowCount.textContent = `${rowsBody.querySelectorAll(".public-submit-card").length} / ${MAX_ROWS} rows`;
 }
 
 function reindex() {
-  Array.from(rowsBody.querySelectorAll("tr")).forEach((row, idx) => {
-    row.querySelector(".row-index").textContent = String(idx + 1);
+  Array.from(rowsBody.querySelectorAll(".public-submit-card")).forEach((row, idx) => {
+    row.querySelector(".public-submit-row-number").textContent = `Event ${idx + 1}`;
   });
   updateCount();
 }
 
+function syncPriceState(card) {
+  const priceType = card.querySelector(".price-type").value;
+  const minInput = card.querySelector(".price-min");
+  const maxInput = card.querySelector(".price-max");
+  const isFree = priceType === "Free";
+  minInput.disabled = isFree;
+  maxInput.disabled = isFree;
+  minInput.required = !isFree;
+  maxInput.required = !isFree;
+  if (isFree) {
+    minInput.value = "";
+    maxInput.value = "";
+  }
+}
+
 function addRow() {
-  if (rowsBody.querySelectorAll("tr").length >= MAX_ROWS) return;
-  const row = document.createElement("tr");
-  row.innerHTML = `<td class="row-index"></td>`;
-  row.appendChild(createCell("text", "title", true));
-  row.appendChild(createCell("text", "description", true));
-  row.appendChild(createCell("text", "location", true));
-  row.appendChild(createCell("text", "event-type", true));
-  row.appendChild(createCell("text", "area", true));
-  row.appendChild(createCell("datetime-local", "date-start", true));
-  row.appendChild(createCell("datetime-local", "date-end", true));
-  row.appendChild(createCell("text", "languages", true, "en,sq"));
-  row.appendChild(createCell("text", "price-type", true, "Paid"));
-  row.appendChild(createCell("number", "price-min", true, "0"));
-  row.appendChild(createCell("number", "price-max", true, "0"));
-  row.appendChild(createCell("text", "currency", true, "ALL"));
-  row.appendChild(createCell("url", "ticket-url", true, "https://..."));
-  row.appendChild(createCell("url", "image-url", false, "https://..."));
+  if (rowsBody.querySelectorAll(".public-submit-card").length >= MAX_ROWS) return;
 
-  const fileTd = document.createElement("td");
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.className = "image-file";
-  fileInput.accept = "image/*";
-  fileTd.appendChild(fileInput);
-  row.appendChild(fileTd);
+  const card = document.createElement("div");
+  card.className = "public-submit-card";
 
-  const actionTd = document.createElement("td");
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.className = "secondary";
-  remove.textContent = "Remove";
-  remove.addEventListener("click", () => {
-    row.remove();
+  const header = document.createElement("div");
+  header.className = "public-submit-card-header";
+
+  const title = document.createElement("h3");
+  title.className = "public-submit-row-number";
+  title.textContent = "Event 1";
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "secondary";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    card.remove();
     reindex();
   });
-  actionTd.appendChild(remove);
-  row.appendChild(actionTd);
-  rowsBody.appendChild(row);
-  row.querySelector(".price-type").value = "Paid";
-  row.querySelector(".currency").value = "ALL";
+
+  header.append(title, removeButton);
+
+  const grid = document.createElement("div");
+  grid.className = "public-submit-grid";
+
+  const titleInput = createInput("text", "title", "Event title", true);
+  const descriptionInput = createTextarea("description", "Description", true);
+  const addressInput = createInput("text", "address", "Street address", true);
+  const eventTypeSelect = createSelect("event-type", EVENT_TYPES, true);
+  const areaSelect = createSelect("area", AREAS, true);
+  const startInput = createInput("datetime-local", "date-start", "", true);
+  const endInput = createInput("datetime-local", "date-end", "", true);
+  const languageSelect = createSelect("language", LANGS.map((lang) => ({ value: lang.code, label: lang.label })), true);
+  const priceTypeSelect = createSelect("price-type", PRICE_TYPE_OPTIONS, true);
+  const priceMinInput = createInput("number", "price-min", "Minimum price");
+  priceMinInput.step = "0.01";
+  const priceMaxInput = createInput("number", "price-max", "Maximum price");
+  priceMaxInput.step = "0.01";
+  const currencySelect = createSelect("currency", CURRENCY_OPTIONS, true);
+  const ticketUrlInput = createInput("url", "ticket-url", "Ticket / RSVP URL");
+  const imageUrlInput = createInput("url", "image-url", "Image URL");
+  const imageFileInput = createInput("file", "image-file");
+  imageFileInput.accept = "image/*";
+
+  grid.append(
+    createField("Title *", titleInput),
+    createField("Description *", descriptionInput),
+    createField("Address *", addressInput),
+    createField("Type *", eventTypeSelect),
+    createField("Area *", areaSelect),
+    createField("Start *", startInput),
+    createField("End *", endInput),
+    createField("Language *", languageSelect),
+    createField("Paid / Free *", priceTypeSelect),
+    createField("Min price", priceMinInput),
+    createField("Max price", priceMaxInput),
+    createField("Currency *", currencySelect),
+    createField("Ticket URL", ticketUrlInput),
+    createField("Image URL", imageUrlInput),
+    createField("Image file", imageFileInput)
+  );
+
+  card.append(header, grid);
+  rowsBody.appendChild(card);
+
+  priceTypeSelect.addEventListener("change", () => syncPriceState(card));
+  syncPriceState(card);
   reindex();
 }
 
-function rowEmpty(row) {
-  const hasValue = Array.from(row.querySelectorAll("input")).some((input) => input.type !== "file" && String(input.value || "").trim());
-  const hasFile = row.querySelector(".image-file")?.files?.[0];
+function rowEmpty(card) {
+  const fields = [
+    ".title",
+    ".description",
+    ".address",
+    ".date-start",
+    ".date-end",
+    ".ticket-url",
+    ".image-url"
+  ];
+  const hasValue = fields.some((selector) => String(card.querySelector(selector)?.value || "").trim());
+  const hasFile = card.querySelector(".image-file")?.files?.[0];
   return !hasValue && !hasFile;
 }
 
@@ -137,34 +235,39 @@ async function submitRows() {
     return;
   }
 
-  const rows = Array.from(rowsBody.querySelectorAll("tr")).filter((row) => !rowEmpty(row));
-  if (!rows.length) {
+  const cards = Array.from(rowsBody.querySelectorAll(".public-submit-card")).filter((card) => !rowEmpty(card));
+  if (!cards.length) {
     setStatus("Add at least one event row.", "error");
     return;
   }
 
   const payloads = [];
-  for (const row of rows) {
-    const rowNo = row.querySelector(".row-index").textContent;
-    const title = row.querySelector(".title").value.trim();
-    const description = row.querySelector(".description").value.trim();
-    const location = row.querySelector(".location").value.trim();
-    const eventType = row.querySelector(".event-type").value.trim();
-    const area = row.querySelector(".area").value.trim();
-    const dateStart = toIsoOrNull(row.querySelector(".date-start").value.trim());
-    const dateEnd = toIsoOrNull(row.querySelector(".date-end").value.trim());
-    const languages = row.querySelector(".languages").value.trim();
-    const priceType = row.querySelector(".price-type").value.trim();
-    const priceMin = row.querySelector(".price-min").value.trim();
-    const priceMax = row.querySelector(".price-max").value.trim();
-    const currency = row.querySelector(".currency").value.trim();
-    const ticketUrl = row.querySelector(".ticket-url").value.trim();
-    const imageUrlInput = row.querySelector(".image-url").value.trim();
-    const file = row.querySelector(".image-file")?.files?.[0] || null;
+  for (const card of cards) {
+    const rowNo = card.querySelector(".public-submit-row-number").textContent;
+    const title = card.querySelector(".title").value.trim();
+    const description = card.querySelector(".description").value.trim();
+    const address = card.querySelector(".address").value.trim();
+    const eventType = card.querySelector(".event-type").value.trim();
+    const area = card.querySelector(".area").value.trim();
+    const dateStart = toIsoOrNull(card.querySelector(".date-start").value.trim());
+    const dateEnd = toIsoOrNull(card.querySelector(".date-end").value.trim());
+    const language = card.querySelector(".language").value.trim();
+    const priceType = card.querySelector(".price-type").value.trim();
+    const priceMin = card.querySelector(".price-min").value.trim();
+    const priceMax = card.querySelector(".price-max").value.trim();
+    const currency = card.querySelector(".currency").value.trim();
+    const ticketUrl = card.querySelector(".ticket-url").value.trim();
+    const imageUrlInput = card.querySelector(".image-url").value.trim();
+    const file = card.querySelector(".image-file")?.files?.[0] || null;
 
-    const required = [title, description, location, eventType, area, dateStart, dateEnd, languages, priceType, priceMin, priceMax, currency, ticketUrl];
-    if (required.some((v) => !v)) {
-      setStatus(`Row ${rowNo} is missing required fields.`, "error");
+    const required = [title, description, address, eventType, area, dateStart, dateEnd, language, priceType, currency];
+    if (required.some((value) => !value)) {
+      setStatus(`${rowNo} is missing required fields.`, "error");
+      return;
+    }
+
+    if (priceType !== "Free" && (!priceMin || !priceMax)) {
+      setStatus(`${rowNo} needs min and max prices unless the event is Free.`, "error");
       return;
     }
 
@@ -173,7 +276,7 @@ async function submitRows() {
       try {
         imageUrl = await uploadImage(file);
       } catch (error) {
-        setStatus(`Image upload failed on row ${rowNo}: ${error.message}`, "error");
+        setStatus(`Image upload failed on ${rowNo}: ${error.message}`, "error");
         return;
       }
     }
@@ -182,17 +285,17 @@ async function submitRows() {
       status: "pending",
       title_en: title,
       description_en: description,
-      location_en: location,
+      location_en: address,
       event_type: eventType,
       area,
-      event_language: languages.split(",").map((v) => v.trim()).filter(Boolean),
+      event_language: [language],
       date_start: dateStart,
       date_end: dateEnd,
       price_type: priceType,
-      price_min: priceMin,
-      price_max: priceMax,
+      price_min: priceType === "Free" ? null : priceMin,
+      price_max: priceType === "Free" ? null : priceMax,
       currency,
-      ticket_url: ticketUrl,
+      ticket_url: ticketUrl || null,
       event_image_url: imageUrl,
       organizer_name: organizerName.value.trim(),
       organizer_email: organizerEmail.value.trim(),
@@ -213,7 +316,7 @@ async function submitRows() {
 
 addRowButton.addEventListener("click", addRow);
 fillRowsButton.addEventListener("click", () => {
-  while (rowsBody.querySelectorAll("tr").length < MAX_ROWS) addRow();
+  while (rowsBody.querySelectorAll(".public-submit-card").length < MAX_ROWS) addRow();
 });
 submitButton.addEventListener("click", submitRows);
 

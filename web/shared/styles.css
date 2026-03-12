@@ -638,6 +638,58 @@ section {
   min-width: 170px;
 }
 
+.public-submit-rows {
+  display: grid;
+  gap: 14px;
+}
+
+.public-submit-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 14px;
+}
+
+.public-submit-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.public-submit-card-header h3 {
+  margin: 0;
+  font-family: var(--font-title);
+}
+
+.public-submit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.public-submit-field {
+  display: grid;
+  gap: 6px;
+}
+
+.public-submit-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.public-submit-field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.public-submit-field input:disabled {
+  background: #ece6dd;
+  color: #8c8174;
+  cursor: not-allowed;
+}
+
 .status-pill {
   padding: 4px 10px;
   border-radius: 999px;
