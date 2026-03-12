@@ -45,6 +45,26 @@
         <div class="notice" id="public-batch-status" style="display:none;"></div>
       </section>
     </div>
+
+    <div id="description-modal" class="modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-content description-modal-content">
+        <h2>Description</h2>
+        <div class="description-editor-wrap">
+          <textarea
+            id="description-editor"
+            class="description-editor"
+            maxlength="2000"
+            placeholder="Enter event description"
+          ></textarea>
+          <span id="description-counter" class="description-counter">2000 / 2000 left</span>
+        </div>
+        <div class="description-modal-footer">
+          <button id="description-done" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="../../shared/vendor.js"></script>
     <script type="module" src="./submit.js"></script>
   </body>

@@ -18,12 +18,18 @@ const addRowButton = document.getElementById("public-batch-add");
 const fillRowsButton = document.getElementById("public-batch-fill");
 const submitButton = document.getElementById("public-batch-submit");
 const statusBox = document.getElementById("public-batch-status");
+const descriptionModal = document.getElementById("description-modal");
+const descriptionEditor = document.getElementById("description-editor");
+const descriptionCounter = document.getElementById("description-counter");
+const descriptionDoneButton = document.getElementById("description-done");
 
 const submitterName = document.getElementById("submitter-name");
 const submitterEmail = document.getElementById("submitter-email");
 const organizerName = document.getElementById("organizer-name");
 const organizerEmail = document.getElementById("organizer-email");
 const submitterNote = document.getElementById("submitter-note");
+
+let activeDescriptionInput = null;
 
 function setStatus(message, kind = "info") {
   statusBox.style.display = "block";
@@ -97,6 +103,64 @@ function createTextarea(className, placeholder = "", required = false) {
   return textarea;
 }
 
+function descriptionSummary(value) {
+  const text = String(value || "").trim();
+  if (!text) return "Open description";
+  if (text.length <= 72) return text;
+  return `${text.slice(0, 69)}...`;
+}
+
+function setDescriptionCounter(value) {
+  const remaining = Math.max(0, 2000 - String(value || "").length);
+  descriptionCounter.textContent = `${remaining} / 2000 left`;
+}
+
+function syncDescriptionButton(input) {
+  const button = input.closest(".public-submit-field")?.querySelector(".description-launch");
+  if (!button) return;
+  const hasValue = Boolean(String(input.value || "").trim());
+  button.textContent = descriptionSummary(input.value);
+  button.classList.toggle("is-filled", hasValue);
+}
+
+function openDescriptionModal(input) {
+  activeDescriptionInput = input;
+  descriptionEditor.value = input.value || "";
+  setDescriptionCounter(descriptionEditor.value);
+  descriptionModal.hidden = false;
+  descriptionEditor.focus();
+  descriptionEditor.setSelectionRange(descriptionEditor.value.length, descriptionEditor.value.length);
+}
+
+function closeDescriptionModal(save) {
+  if (save && activeDescriptionInput) {
+    activeDescriptionInput.value = descriptionEditor.value;
+    syncDescriptionButton(activeDescriptionInput);
+  }
+  activeDescriptionInput = null;
+  descriptionModal.hidden = true;
+}
+
+function createDescriptionField() {
+  const hiddenInput = createTextarea("description", "", true);
+  hiddenInput.hidden = true;
+  hiddenInput.maxLength = 2000;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "public-submit-launch description-launch";
+  button.textContent = "Open description";
+  button.addEventListener("click", () => openDescriptionModal(hiddenInput));
+
+  const wrap = document.createElement("label");
+  wrap.className = "public-submit-field";
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Description *";
+  wrap.append(label, button, hiddenInput);
+  return wrap;
+}
+
 function createSelect(className, options, required = false) {
   const select = document.createElement("select");
   select.className = className;
@@ -159,7 +223,6 @@ function addRow() {
   grid.className = "public-submit-grid";
 
   const titleInput = createInput("text", "title", "Event title", true);
-  const descriptionInput = createTextarea("description", "Description", true);
   const addressInput = createInput("text", "address", "Street address", true);
   const eventTypeSelect = createSelect("event-type", EVENT_TYPES, true);
   const areaSelect = createSelect("area", AREAS, true);
@@ -179,7 +242,7 @@ function addRow() {
 
   grid.append(
     createField("Title *", titleInput),
-    createField("Description *", descriptionInput),
+    createDescriptionField(),
     createField("Address *", addressInput),
     createField("Type *", eventTypeSelect),
     createField("Area *", areaSelect),
@@ -319,5 +382,7 @@ fillRowsButton.addEventListener("click", () => {
   while (rowsBody.querySelectorAll(".public-submit-card").length < MAX_ROWS) addRow();
 });
 submitButton.addEventListener("click", submitRows);
+descriptionEditor.addEventListener("input", () => setDescriptionCounter(descriptionEditor.value));
+descriptionDoneButton.addEventListener("click", () => closeDescriptionModal(true));
 
 addRow();
