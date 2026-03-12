@@ -159,8 +159,17 @@ app.patch("/v1/users/:userId/role", async (request, reply) => {
   const { role } = request.body || {};
   if (!["moderator", "editor", "owner"].includes(role)) return reply.code(400).send({ error: "Invalid role" });
 
+  const currentRoleRow = await serviceClient
+    .from("admin_user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (currentRoleRow.error) return reply.code(500).send({ error: currentRoleRow.error.message });
+  const targetCurrentRole = currentRoleRow.data?.role || null;
+
   if (canRole(request.role, "moderator") && !canRole(request.role, "owner")) {
     if (role !== "editor") return reply.code(403).send({ error: "Moderator can only elevate to editor" });
+    if (targetCurrentRole === "owner") return reply.code(403).send({ error: "Only owner can modify owner role" });
   }
 
   if (role === "owner" && !canRole(request.role, "owner")) {

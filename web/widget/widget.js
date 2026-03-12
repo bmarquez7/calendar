@@ -224,8 +224,8 @@ function eventDetailHtml(event) {
     <p>${description}</p>
     <div class="meta">
       <span>Location: ${location}</span>
-      <span>Date: ${date}</span>
-      <span>Type: ${event.event_type || ""}</span>
+      <span>Date: ${escapeHtml(date)}</span>
+      <span>Type: ${escapeHtml(event.event_type || "")}</span>
       <span>Languages: ${languages}</span>
       <span>Price: ${price}</span>
     </div>
@@ -414,7 +414,7 @@ function renderEvents() {
       actions.appendChild(link);
     }
 
-    if (event.event_image_url) {
+    if (eventImageUrl) {
       card.append(title, image, desc, meta, actions);
     } else {
       card.append(title, desc, meta, actions);

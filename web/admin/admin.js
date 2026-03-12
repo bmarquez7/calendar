@@ -58,6 +58,15 @@ const ROLE_RANK = {
   owner: 3
 };
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function hasRole(minRole) {
   if (!currentRole) return false;
   return ROLE_RANK[currentRole] >= ROLE_RANK[minRole];
@@ -98,6 +107,25 @@ function setStatus(element, message, kind = "info") {
 
 function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function toIsoOrNull(value) {
+  const input = String(value || "").trim();
+  if (!input) return null;
+  const date = new Date(input);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function toLocalInputValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 async function uploadEventImage(file, folder) {
@@ -217,8 +245,8 @@ function fillEditForm(event) {
   editForm.event_type.value = event.event_type || "";
   editForm.area.value = event.area || "";
   editForm.event_language.value = (event.event_language || []).join(",");
-  editForm.date_start.value = event.date_start ? event.date_start.slice(0, 16) : "";
-  editForm.date_end.value = event.date_end ? event.date_end.slice(0, 16) : "";
+  editForm.date_start.value = toLocalInputValue(event.date_start);
+  editForm.date_end.value = toLocalInputValue(event.date_end);
   editForm.repeat_frequency.value = "none";
   editForm.repeat_until.value = "";
   editForm.status.value = event.status || "pending";
@@ -258,8 +286,8 @@ function toPayload(formData) {
       .split(",")
       .map((v) => v.trim())
       .filter(Boolean),
-    date_start: formData.get("date_start") || null,
-    date_end: formData.get("date_end") || null,
+    date_start: toIsoOrNull(formData.get("date_start")),
+    date_end: toIsoOrNull(formData.get("date_end")),
     repeat_frequency: formData.get("repeat_frequency") || "none",
     repeat_until: formData.get("repeat_until") || null,
     status: formData.get("status") || "approved",
@@ -374,11 +402,11 @@ function renderTable() {
   currentEvents.forEach((event) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${event.title_en || "Untitled"}</td>
-      <td><span class="status-pill">${event.status}</span></td>
-      <td>${event.date_start ? new Date(event.date_start).toLocaleString() : ""}</td>
-      <td>${event.area || ""}</td>
-      <td>${event.event_type || ""}</td>
+      <td>${escapeHtml(event.title_en || "Untitled")}</td>
+      <td><span class="status-pill">${escapeHtml(event.status || "")}</span></td>
+      <td>${escapeHtml(event.date_start ? new Date(event.date_start).toLocaleString() : "")}</td>
+      <td>${escapeHtml(event.area || "")}</td>
+      <td>${escapeHtml(event.event_type || "")}</td>
       <td></td>
     `;
 
@@ -444,9 +472,9 @@ async function loadUsers() {
     users.forEach((user) => {
       const row = document.createElement("tr");
       row.innerHTML = `
-        <td>${user.email || ""}</td>
-        <td>${user.id}</td>
-        <td>${user.role || "moderator"}</td>
+        <td>${escapeHtml(user.email || "")}</td>
+        <td>${escapeHtml(user.id)}</td>
+        <td>${escapeHtml(user.role || "moderator")}</td>
         <td></td>
       `;
       const actions = row.querySelector("td:last-child");
@@ -616,8 +644,8 @@ function addBatchRow(prefill = {}) {
   row.querySelector(".batch-location").value = prefill.location_en || "";
   row.querySelector(".batch-type").value = prefill.event_type || "";
   row.querySelector(".batch-area").value = prefill.area || "";
-  row.querySelector(".batch-date-start").value = prefill.date_start || "";
-  row.querySelector(".batch-date-end").value = prefill.date_end || "";
+  row.querySelector(".batch-date-start").value = toLocalInputValue(prefill.date_start);
+  row.querySelector(".batch-date-end").value = toLocalInputValue(prefill.date_end);
   row.querySelector(".batch-languages").value = prefill.event_language || "en";
   row.querySelector(".batch-price-type").value = prefill.price_type || "Paid";
   row.querySelector(".batch-price-min").value = prefill.price_min || "0";
@@ -666,8 +694,8 @@ function collectBatchRowPayload(row) {
   const location_en = (row.querySelector(".batch-location")?.value || "").trim();
   const event_type = (row.querySelector(".batch-type")?.value || "").trim();
   const area = (row.querySelector(".batch-area")?.value || "").trim();
-  const date_start = (row.querySelector(".batch-date-start")?.value || "").trim();
-  const date_end = (row.querySelector(".batch-date-end")?.value || "").trim();
+  const date_start = toIsoOrNull(row.querySelector(".batch-date-start")?.value || "");
+  const date_end = toIsoOrNull(row.querySelector(".batch-date-end")?.value || "");
   const languages = (row.querySelector(".batch-languages")?.value || "").trim();
   const price_type = (row.querySelector(".batch-price-type")?.value || "").trim();
   const price_min = (row.querySelector(".batch-price-min")?.value || "").trim();

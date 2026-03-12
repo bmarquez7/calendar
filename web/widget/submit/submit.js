@@ -29,6 +29,13 @@ function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function toIsoOrNull(value) {
+  const input = String(value || "").trim();
+  if (!input) return null;
+  const date = new Date(input);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 async function uploadImage(file) {
   const safeName = sanitizeFilename(file.name || "poster.jpg");
   const path = `public-batch/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
@@ -144,8 +151,8 @@ async function submitRows() {
     const location = row.querySelector(".location").value.trim();
     const eventType = row.querySelector(".event-type").value.trim();
     const area = row.querySelector(".area").value.trim();
-    const dateStart = row.querySelector(".date-start").value.trim();
-    const dateEnd = row.querySelector(".date-end").value.trim();
+    const dateStart = toIsoOrNull(row.querySelector(".date-start").value.trim());
+    const dateEnd = toIsoOrNull(row.querySelector(".date-end").value.trim());
     const languages = row.querySelector(".languages").value.trim();
     const priceType = row.querySelector(".price-type").value.trim();
     const priceMin = row.querySelector(".price-min").value.trim();
