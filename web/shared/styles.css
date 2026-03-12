@@ -667,16 +667,25 @@ section {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: stretch;
 }
 
 .public-submit-field {
   display: grid;
   gap: 6px;
+  align-content: start;
 }
 
 .public-submit-label {
   font-size: 13px;
   color: var(--muted);
+  min-height: 18px;
+}
+
+.public-submit-field input,
+.public-submit-field select,
+.public-submit-field textarea {
+  min-height: 44px;
 }
 
 .public-submit-field textarea {
