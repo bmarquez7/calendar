@@ -21,6 +21,10 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);
@@ -704,7 +708,7 @@ section {
 }
 
 .public-submit-launch.is-filled {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .public-submit-field textarea {
@@ -775,8 +779,38 @@ section {
 }
 
 @media (max-width: 720px) {
+  .app {
+    padding: 18px 14px 40px;
+  }
+
+  section {
+    margin-top: 18px;
+  }
+
   .hero {
-    padding: 18px;
+    padding: 18px 16px;
+  }
+
+  .hero h1 {
+    font-size: 30px;
+  }
+
+  .hero p {
+    font-size: 15px;
+  }
+
+  .controls,
+  .grid-two,
+  .public-submit-grid,
+  .task-grid,
+  .hex-palette {
+    grid-template-columns: 1fr;
+  }
+
+  .featured-box,
+  .form-card,
+  .calendar {
+    padding: 14px;
   }
 
   .featured-grid {
@@ -793,11 +827,119 @@ section {
     gap: 10px;
   }
 
+  .language-switcher,
+  .hero-actions {
+    width: 100%;
+  }
+
   .hero-actions {
     justify-items: stretch;
   }
 
+  .hero-actions .button-link,
+  .hero-actions button,
+  .language-switcher > button,
+  .admin-bar > button,
+  .admin-bar > .button-link {
+    width: 100%;
+    text-align: center;
+  }
+
+  .language-menu {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+
+  .calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .calendar-cell {
+    min-height: 78px;
+    padding: 6px;
+  }
+
+  .calendar-date {
+    font-size: 12px;
+  }
+
+  .calendar-chip {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .calendar-week-scroll,
+  .table {
+    overflow-x: auto;
+  }
+
+  .calendar-week {
+    min-width: 700px;
+  }
+
+  .table {
+    display: block;
+    width: 100%;
+  }
+
+  .modal-content {
+    width: calc(100% - 24px);
+    max-height: 88vh;
+    margin: 24px auto;
+    padding: 16px;
+  }
+
+  .description-editor {
+    min-height: 240px;
+  }
+
+  .task-card {
+    min-height: 72px;
+  }
+
   .lang-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 14px 10px 28px;
+  }
+
+  .hero h1 {
+    font-size: 26px;
+  }
+
+  .featured-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-grid {
+    gap: 3px;
+  }
+
+  .calendar-cell {
+    min-height: 68px;
+    padding: 5px;
+  }
+
+  .calendar-events {
+    gap: 3px;
+  }
+
+  .badge {
+    justify-content: center;
   }
 }
