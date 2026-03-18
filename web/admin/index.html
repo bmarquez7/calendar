@@ -62,6 +62,7 @@
               <tr>
                 <th>Title</th>
                 <th>Status</th>
+                <th>Highlighted</th>
                 <th>Date</th>
                 <th>Area</th>
                 <th>Type</th>
@@ -108,6 +109,10 @@
                 <input type="date" name="repeat_until" placeholder="Repeat until" />
               </div>
               <input name="status" placeholder="Status (approved | pending | denied)" />
+              <label class="toggle-field">
+                <input type="checkbox" name="is_highlighted" />
+                <span>Highlight this event on the public calendar</span>
+              </label>
               <div class="grid-two">
                 <input name="price_type" placeholder="Price type" />
                 <input type="number" step="0.01" name="price_min" placeholder="Min price" />
@@ -155,6 +160,7 @@
                       <th>Max *</th>
                       <th>Currency *</th>
                       <th>Status *</th>
+                      <th>Highlighted</th>
                       <th>Ticket URL *</th>
                       <th>Image URL</th>
                       <th>Image file</th>

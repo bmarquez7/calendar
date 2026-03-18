@@ -31,7 +31,8 @@ This package contains only the calendar app components, isolated from other loca
 1. Run `data/schema.sql` in SQL Editor.
 2. Run `data/roles_setup.sql` in SQL Editor.
 3. If this project was already deployed before the latest launch hardening changes, run `data/patch_launch_security.sql` in SQL Editor before launch.
-4. Configure `web/shared/config.js`:
+4. If this project was already deployed before featured-event and expiry support, run `data/patch_featured_expiry.sql` in SQL Editor.
+5. Configure `web/shared/config.js`:
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `EVENT_IMAGE_BUCKET` (default `event-posters`)

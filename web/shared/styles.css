@@ -235,6 +235,21 @@ textarea {
   color: var(--ink);
 }
 
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--brand);
+}
+
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
 input[type="date"] {
   padding: 8px 12px;
 }

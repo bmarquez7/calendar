@@ -25,6 +25,7 @@ create table if not exists public.events (
   currency text default 'ALL',
   ticket_url text,
   event_image_url text,
+  is_highlighted boolean not null default false,
   organizer_name text,
   organizer_email text,
   submitter_name text,
@@ -50,6 +51,12 @@ create table if not exists public.site_settings (
   widget_theme jsonb,
   updated_at timestamptz not null default now()
 );
+
+create index if not exists events_expiry_idx
+on public.events ((coalesce(date_end, date_start)));
+
+create index if not exists events_highlight_idx
+on public.events (is_highlighted, created_at desc);
 
 create table if not exists public.admin_user_roles (
   user_id uuid primary key,

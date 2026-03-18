@@ -26,8 +26,11 @@ const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const ROLE_RANK = { moderator: 1, editor: 2, owner: 3 };
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(__dirname, "..", "web");
+let lastCleanupRunAt = 0;
+let cleanupPromise = null;
 
 await app.register(cors, {
   origin: APP_ORIGIN === "*" ? true : APP_ORIGIN,
@@ -66,6 +69,40 @@ function canRole(actorRole, minRole) {
   return (ROLE_RANK[actorRole] || 0) >= (ROLE_RANK[minRole] || 0);
 }
 
+async function cleanupExpiredEvents() {
+  const cutoffIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  const endedDelete = await serviceClient
+    .from("events")
+    .delete()
+    .lt("date_end", cutoffIso);
+  if (endedDelete.error) throw endedDelete.error;
+
+  const singleDayDelete = await serviceClient
+    .from("events")
+    .delete()
+    .is("date_end", null)
+    .lt("date_start", cutoffIso);
+  if (singleDayDelete.error) throw singleDayDelete.error;
+}
+
+function maybeRunCleanup(force = false) {
+  const now = Date.now();
+  if (!force && now - lastCleanupRunAt < CLEANUP_INTERVAL_MS) return cleanupPromise;
+  if (cleanupPromise) return cleanupPromise;
+
+  lastCleanupRunAt = now;
+  cleanupPromise = cleanupExpiredEvents()
+    .catch((error) => {
+      app.log.error({ err: error }, "Expired event cleanup failed");
+    })
+    .finally(() => {
+      cleanupPromise = null;
+    });
+
+  return cleanupPromise;
+}
+
 app.addHook("preHandler", async (request, reply) => {
   const path = request.raw.url || "";
   if (!path.startsWith("/v1/")) return;
@@ -88,21 +125,28 @@ app.addHook("preHandler", async (request, reply) => {
   request.role = role;
 });
 
-app.get("/v1/health", async () => ({ ok: true }));
+app.get("/v1/health", async () => {
+  void maybeRunCleanup();
+  return { ok: true };
+});
 
 app.get("/", async (_, reply) => {
+  void maybeRunCleanup();
   return reply.redirect("/widget/");
 });
 
 app.get("/widget/", async (_, reply) => {
+  void maybeRunCleanup();
   return reply.sendFile("widget/index.html");
 });
 
 app.get("/widget/submit/", async (_, reply) => {
+  void maybeRunCleanup();
   return reply.sendFile("widget/submit/index.html");
 });
 
 app.get("/admin/", async (_, reply) => {
+  void maybeRunCleanup();
   return reply.sendFile("admin/index.html");
 });
 
@@ -218,5 +262,11 @@ app.delete("/v1/users/:userId", async (request, reply) => {
   await serviceClient.from("admin_user_roles").delete().eq("user_id", userId);
   return { ok: true, user_id: userId };
 });
+
+void maybeRunCleanup(true);
+const cleanupTimer = setInterval(() => {
+  void maybeRunCleanup(true);
+}, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref?.();
 
 app.listen({ port: Number(PORT), host: HOST });

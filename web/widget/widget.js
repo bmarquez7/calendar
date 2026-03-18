@@ -364,6 +364,32 @@ function filterEvents() {
     });
 }
 
+function eventEndsAt(event) {
+  const rawValue = event.date_end || event.date_start;
+  if (!rawValue) return null;
+  const date = new Date(rawValue);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isPublicEventActive(event, reference = new Date()) {
+  const endDate = eventEndsAt(event);
+  return Boolean(endDate && endDate >= reference);
+}
+
+function featuredFallbackSort(a, b) {
+  const createdDiff = new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  if (createdDiff !== 0) return createdDiff;
+  return new Date(b.date_start || 0) - new Date(a.date_start || 0);
+}
+
+function getHighlightedEvents() {
+  const selected = state.events
+    .filter((event) => event.is_highlighted)
+    .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
+  const fallback = state.events.filter((event) => !event.is_highlighted).sort(featuredFallbackSort);
+  return [...selected, ...fallback].slice(0, 10);
+}
+
 function renderEvents() {
   const events = filterEvents();
   eventList.innerHTML = "";
@@ -425,10 +451,7 @@ function renderEvents() {
 }
 
 function renderFeatured() {
-  const items = [...state.events]
-    .filter((event) => event.date_start)
-    .sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
-    .slice(0, 10);
+  const items = getHighlightedEvents();
   const placeholderImage = state.settings?.featured_placeholder_image_url || "";
 
   featuredGrid.innerHTML = "";
@@ -649,7 +672,8 @@ async function loadEvents() {
     console.error(error);
     return;
   }
-  state.events = data || [];
+  const now = new Date();
+  state.events = (data || []).filter((event) => isPublicEventActive(event, now));
   render();
 }
 

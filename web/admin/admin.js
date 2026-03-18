@@ -250,6 +250,7 @@ function fillEditForm(event) {
   editForm.repeat_frequency.value = "none";
   editForm.repeat_until.value = "";
   editForm.status.value = event.status || "pending";
+  editForm.is_highlighted.checked = Boolean(event.is_highlighted);
   editForm.price_type.value = event.price_type || "";
   editForm.price_min.value = event.price_min || "";
   editForm.price_max.value = event.price_max || "";
@@ -264,12 +265,14 @@ function clearFormForNew() {
   editForm.repeat_frequency.value = "none";
   editForm.repeat_until.value = "";
   editForm.status.value = "approved";
+  editForm.is_highlighted.checked = false;
   editForm.price_type.value = "Paid";
   editForm.currency.value = "ALL";
   setStatus(editStatus, "Creating a new event.");
 }
 
 function toPayload(formData) {
+  const status = formData.get("status") || "approved";
   return {
     title_en: formData.get("title_en") || "",
     title_es: formData.get("title_es") || null,
@@ -290,7 +293,8 @@ function toPayload(formData) {
     date_end: toIsoOrNull(formData.get("date_end")),
     repeat_frequency: formData.get("repeat_frequency") || "none",
     repeat_until: formData.get("repeat_until") || null,
-    status: formData.get("status") || "approved",
+    status,
+    is_highlighted: status === "approved" && formData.get("is_highlighted") === "on",
     price_type: formData.get("price_type") || "Paid",
     price_min: formData.get("price_min") || null,
     price_max: formData.get("price_max") || null,
@@ -377,7 +381,19 @@ async function saveEvent(payload) {
 
 async function updateStatus(id, status) {
   if (!hasRole("moderator")) return;
-  const { error } = await client.from("events").update({ status }).eq("id", id);
+  const patch = { status };
+  if (status !== "approved") patch.is_highlighted = false;
+  const { error } = await client.from("events").update(patch).eq("id", id);
+  if (error) {
+    alert(error.message);
+    return;
+  }
+  await loadEvents();
+}
+
+async function toggleHighlight(id, isHighlighted) {
+  if (!hasRole("moderator")) return;
+  const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).eq("id", id);
   if (error) {
     alert(error.message);
     return;
@@ -404,6 +420,7 @@ function renderTable() {
     row.innerHTML = `
       <td>${escapeHtml(event.title_en || "Untitled")}</td>
       <td><span class="status-pill">${escapeHtml(event.status || "")}</span></td>
+      <td>${event.is_highlighted ? '<span class="status-pill">Yes</span>' : "—"}</td>
       <td>${escapeHtml(event.date_start ? new Date(event.date_start).toLocaleString() : "")}</td>
       <td>${escapeHtml(event.area || "")}</td>
       <td>${escapeHtml(event.event_type || "")}</td>
@@ -428,6 +445,14 @@ function renderTable() {
       deny.addEventListener("click", () => updateStatus(event.id, "denied"));
 
       actionsCell.append(approve, hold, deny);
+
+      if (event.status === "approved" || event.is_highlighted) {
+        const highlight = document.createElement("button");
+        highlight.textContent = event.is_highlighted ? "Unhighlight" : "Highlight";
+        highlight.className = "secondary";
+        highlight.addEventListener("click", () => toggleHighlight(event.id, !event.is_highlighted));
+        actionsCell.appendChild(highlight);
+      }
     }
 
     if (hasRole("editor")) {
@@ -595,6 +620,15 @@ function createBatchCell(type, className, placeholder = "", required = false) {
   return td;
 }
 
+function createBatchCheckboxCell(className) {
+  const td = document.createElement("td");
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.className = className;
+  td.appendChild(input);
+  return td;
+}
+
 function addBatchRow(prefill = {}) {
   const currentCount = batchRowsBody.querySelectorAll("tr").length;
   if (currentCount >= MAX_BATCH_ROWS) return;
@@ -614,6 +648,7 @@ function addBatchRow(prefill = {}) {
   row.appendChild(createBatchCell("number", "batch-price-max", "0", true));
   row.appendChild(createBatchCell("text", "batch-currency", "ALL", true));
   row.appendChild(createBatchCell("text", "batch-status", "approved", true));
+  row.appendChild(createBatchCheckboxCell("batch-highlighted"));
   row.appendChild(createBatchCell("url", "batch-ticket-url", "https://...", true));
   row.appendChild(createBatchCell("url", "batch-image-url", "https://...", false));
 
@@ -652,6 +687,7 @@ function addBatchRow(prefill = {}) {
   row.querySelector(".batch-price-max").value = prefill.price_max || "0";
   row.querySelector(".batch-currency").value = prefill.currency || "ALL";
   row.querySelector(".batch-status").value = prefill.status || "approved";
+  row.querySelector(".batch-highlighted").checked = Boolean(prefill.is_highlighted);
   row.querySelector(".batch-ticket-url").value = prefill.ticket_url || "";
   row.querySelector(".batch-image-url").value = prefill.event_image_url || "";
 
@@ -702,6 +738,7 @@ function collectBatchRowPayload(row) {
   const price_max = (row.querySelector(".batch-price-max")?.value || "").trim();
   const currency = (row.querySelector(".batch-currency")?.value || "").trim();
   const status = (row.querySelector(".batch-status")?.value || "").trim();
+  const is_highlighted = Boolean(row.querySelector(".batch-highlighted")?.checked);
   const ticket_url = (row.querySelector(".batch-ticket-url")?.value || "").trim();
   const event_image_url = (row.querySelector(".batch-image-url")?.value || "").trim();
   const event_image_file = row.querySelector(".batch-image-file")?.files?.[0] || null;
@@ -726,6 +763,7 @@ function collectBatchRowPayload(row) {
       price_max: price_max || null,
       currency,
       status,
+      is_highlighted: status === "approved" ? is_highlighted : false,
       ticket_url,
       event_image_url: event_image_url || null
     }
