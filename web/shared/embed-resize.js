@@ -20,15 +20,14 @@
   document.documentElement.style.height = "auto";
   document.body.style.height = "auto";
 
+  function activeContentRoot() {
+    const appRoots = Array.from(document.querySelectorAll(".app"));
+    return appRoots.find((node) => !node.classList.contains("hidden")) || appRoots[0] || document.body;
+  }
+
   function measureHeight() {
-    const body = document.body;
-    const doc = document.documentElement;
-    return Math.max(
-      body?.scrollHeight || 0,
-      body?.offsetHeight || 0,
-      doc?.scrollHeight || 0,
-      doc?.offsetHeight || 0
-    );
+    const root = activeContentRoot();
+    return Math.max(root?.scrollHeight || 0, root?.offsetHeight || 0);
   }
 
   function publishHeight() {
@@ -76,14 +75,19 @@
     document.fonts.ready.then(scheduleHeightPublish).catch(() => {});
   }
 
-  if ("ResizeObserver" in window) {
-    const observer = new ResizeObserver(scheduleHeightPublish);
-    observer.observe(document.documentElement);
-    if (document.body) observer.observe(document.body);
+  let resizeObserver = null;
+  function connectResizeObserver() {
+    if (!("ResizeObserver" in window)) return;
+    if (resizeObserver) resizeObserver.disconnect();
+    resizeObserver = new ResizeObserver(scheduleHeightPublish);
+    resizeObserver.observe(activeContentRoot());
   }
+
+  connectResizeObserver();
 
   if ("MutationObserver" in window) {
     const observer = new MutationObserver((mutations) => {
+      connectResizeObserver();
       scheduleHeightPublish();
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
