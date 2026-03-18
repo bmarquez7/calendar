@@ -26,7 +26,6 @@
     return Math.max(
       body?.scrollHeight || 0,
       body?.offsetHeight || 0,
-      doc?.clientHeight || 0,
       doc?.scrollHeight || 0,
       doc?.offsetHeight || 0
     );
