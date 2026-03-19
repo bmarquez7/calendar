@@ -14,7 +14,7 @@
   --font-title: "Playfair Display", "Times New Roman", serif;
   --font-body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
   --featured-cols-desktop: 5;
-  --featured-cols-mobile: 2;
+  --featured-cols-mobile: 5;
 }
 
 * {
@@ -829,7 +829,27 @@ section {
   }
 
   .featured-grid {
-    grid-template-columns: repeat(var(--featured-cols-mobile), minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .featured-item {
+    min-height: 84px;
+    padding: 6px;
+  }
+
+  .featured-item h4 {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .featured-item p {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .featured-placeholder-image {
+    min-height: 84px;
   }
 
   .admin-bar {
@@ -938,7 +958,25 @@ section {
   }
 
   .featured-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .featured-item {
+    min-height: 72px;
+    padding: 5px;
+  }
+
+  .featured-item h4 {
+    font-size: 10px;
+  }
+
+  .featured-item p {
+    font-size: 9px;
+  }
+
+  .featured-placeholder-image {
+    min-height: 72px;
   }
 
   .calendar-grid {
