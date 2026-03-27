@@ -35,6 +35,7 @@ const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const ROLE_RANK = { moderator: 1, editor: 2, owner: 3 };
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const MAX_PUBLIC_SUBMISSION_EVENTS = 250;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(__dirname, "..", "web");
 let lastCleanupRunAt = 0;
@@ -171,10 +172,13 @@ async function sendMailSafe(message) {
 
 async function notifyAdminOfSubmission(insertedRows) {
   if (!emailRecipients.length) return;
-  const lines = insertedRows.map((row) => {
+  const lines = insertedRows.slice(0, 25).map((row) => {
     const dateLabel = row.date_start ? new Date(row.date_start).toLocaleString("en-GB", { timeZone: "Europe/Tirane" }) : "Unknown date";
     return `- ${row.title_en} | ${dateLabel} | ${row.area}`;
   });
+  if (insertedRows.length > 25) {
+    lines.push(`...and ${insertedRows.length - 25} more event(s).`);
+  }
 
   await sendMailSafe({
     from: SMTP_FROM,
@@ -365,7 +369,9 @@ app.get("/v1/me/role", async (request, reply) => {
 app.post("/v1/public-submissions", async (request, reply) => {
   const submittedEvents = Array.isArray(request.body?.events) ? request.body.events : [];
   if (!submittedEvents.length) return reply.code(400).send({ error: "At least one event is required" });
-  if (submittedEvents.length > 10) return reply.code(400).send({ error: "Maximum 10 events per submission" });
+  if (submittedEvents.length > MAX_PUBLIC_SUBMISSION_EVENTS) {
+    return reply.code(400).send({ error: `Maximum ${MAX_PUBLIC_SUBMISSION_EVENTS} generated events per submission` });
+  }
 
   const normalized = submittedEvents.map(normalizeSubmissionRow);
   for (let i = 0; i < normalized.length; i += 1) {

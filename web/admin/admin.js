@@ -112,6 +112,32 @@ function safeUrl(value) {
   }
 }
 
+function supabaseProjectRef() {
+  try {
+    return new URL(SUPABASE_URL).hostname.split(".")[0] || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearPersistedAuth() {
+  const ref = supabaseProjectRef();
+  if (!ref) return;
+  [window.localStorage, window.sessionStorage].forEach((storage) => {
+    if (!storage) return;
+    const keys = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key && (key.includes(`sb-${ref}`) || key.includes(`lock:sb-${ref}`))) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => storage.removeItem(key));
+  });
+  lastKnownSession = null;
+  accessToken = null;
+}
+
 function appendSelectOptions(select, options) {
   options.forEach((option) => {
     if (option?.options) {
@@ -1260,6 +1286,10 @@ document.addEventListener("visibilitychange", async () => {
   if (session) {
     await loadEvents();
   }
+});
+
+window.addEventListener("beforeunload", () => {
+  clearPersistedAuth();
 });
 
 ensureSession().then(async (session) => {

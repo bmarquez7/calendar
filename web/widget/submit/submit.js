@@ -11,6 +11,17 @@ const CURRENCY_OPTIONS = [
   { value: "USD", label: "USD" }
 ];
 const PRICE_TYPE_OPTIONS = ["Free", "Paid"];
+const MAX_GENERATED_EVENTS = 250;
+const MAX_SPECIFIC_REPEAT_DATES = 10;
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 0, label: "Sun" }
+];
 
 const rowsBody = document.getElementById("public-batch-rows");
 const rowCount = document.getElementById("public-batch-count");
@@ -48,6 +59,46 @@ function toIsoOrNull(value) {
   if (!input) return null;
   const date = new Date(input);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function toDateOnlyValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function addYears(date, years) {
+  const next = new Date(date);
+  next.setFullYear(next.getFullYear() + years);
+  return next;
+}
+
+function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function combineDateWithTime(dateString, timeSource) {
+  const [year, month, day] = String(dateString || "").split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(
+    year,
+    month - 1,
+    day,
+    timeSource.getHours(),
+    timeSource.getMinutes(),
+    timeSource.getSeconds(),
+    timeSource.getMilliseconds()
+  );
 }
 
 async function uploadImage(file) {
@@ -212,6 +263,133 @@ function createLanguageField() {
   return wrap;
 }
 
+function addSpecificDateRow(list, initialValue = "") {
+  if (!list || list.querySelectorAll(".repeat-specific-date-row").length >= MAX_SPECIFIC_REPEAT_DATES) return;
+  const row = document.createElement("div");
+  row.className = "repeat-specific-date-row";
+
+  const input = createInput("date", "repeat-specific-date");
+  input.value = initialValue;
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "secondary";
+  removeButton.textContent = "Remove";
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    const addButton = list.closest(".public-submit-repeat-config")?.querySelector(".repeat-add-date");
+    if (addButton) {
+      addButton.disabled = list.querySelectorAll(".repeat-specific-date-row").length >= MAX_SPECIFIC_REPEAT_DATES;
+    }
+  });
+
+  row.append(input, removeButton);
+  list.appendChild(row);
+}
+
+function createRecurringField() {
+  const wrap = document.createElement("div");
+  wrap.className = "public-submit-field public-submit-repeat-field";
+
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Repeating event";
+
+  const toggleChip = document.createElement("label");
+  toggleChip.className = "public-submit-language-chip";
+  const toggle = document.createElement("input");
+  toggle.type = "checkbox";
+  toggle.className = "repeat-enabled";
+  const toggleText = document.createElement("span");
+  toggleText.textContent = "Repeat this event";
+  toggleChip.append(toggle, toggleText);
+
+  const config = document.createElement("div");
+  config.className = "public-submit-repeat-config";
+  config.hidden = true;
+
+  const frequencySelect = createSelect("repeat-frequency", [
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "annually", label: "Annually (same date)" },
+    { value: "specific_dates", label: "Specific dates" }
+  ]);
+
+  const weeklyPanel = document.createElement("div");
+  weeklyPanel.className = "repeat-panel repeat-panel-weekly";
+  const weeklyLabel = document.createElement("span");
+  weeklyLabel.className = "public-submit-label";
+  weeklyLabel.textContent = "Repeat on";
+  const weeklyOptions = document.createElement("div");
+  weeklyOptions.className = "public-submit-language-options";
+  WEEKDAY_OPTIONS.forEach((day) => {
+    const chip = document.createElement("label");
+    chip.className = "public-submit-language-chip";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "repeat-weekday";
+    input.value = String(day.value);
+    const text = document.createElement("span");
+    text.textContent = day.label;
+    chip.append(input, text);
+    weeklyOptions.appendChild(chip);
+  });
+  weeklyPanel.append(weeklyLabel, weeklyOptions);
+
+  const monthlyPanel = document.createElement("div");
+  monthlyPanel.className = "repeat-panel repeat-panel-monthly";
+  const monthlyLabel = document.createElement("span");
+  monthlyLabel.className = "public-submit-label";
+  monthlyLabel.textContent = "Day of month";
+  const monthlyInput = createInput("number", "repeat-month-day", "1");
+  monthlyInput.min = "1";
+  monthlyInput.max = "31";
+  monthlyPanel.append(monthlyLabel, monthlyInput);
+
+  const annualPanel = document.createElement("div");
+  annualPanel.className = "repeat-panel repeat-panel-annual";
+  annualPanel.innerHTML = '<span class="public-submit-label">Annual repeat uses the same month and day as the start date.</span>';
+
+  const specificPanel = document.createElement("div");
+  specificPanel.className = "repeat-panel repeat-panel-specific";
+  const specificLabel = document.createElement("span");
+  specificLabel.className = "public-submit-label";
+  specificLabel.textContent = "Specific dates (up to 10)";
+  const specificList = document.createElement("div");
+  specificList.className = "repeat-specific-dates";
+  const addDateButton = document.createElement("button");
+  addDateButton.type = "button";
+  addDateButton.className = "secondary repeat-add-date";
+  addDateButton.textContent = "Add date";
+  addDateButton.addEventListener("click", () => {
+    addSpecificDateRow(specificList);
+    addDateButton.disabled = specificList.querySelectorAll(".repeat-specific-date-row").length >= MAX_SPECIFIC_REPEAT_DATES;
+  });
+  specificPanel.append(specificLabel, specificList, addDateButton);
+
+  const untilWrap = document.createElement("div");
+  untilWrap.className = "repeat-until-wrap";
+  const untilLabel = document.createElement("span");
+  untilLabel.className = "public-submit-label";
+  untilLabel.textContent = "Repeat until (optional)";
+  const untilInput = createInput("date", "repeat-until");
+  const helper = document.createElement("p");
+  helper.className = "small repeat-helper";
+  untilWrap.append(untilLabel, untilInput, helper);
+
+  config.append(
+    createField("Frequency", frequencySelect),
+    weeklyPanel,
+    monthlyPanel,
+    annualPanel,
+    specificPanel,
+    untilWrap
+  );
+
+  wrap.append(label, toggleChip, config);
+  return wrap;
+}
+
 function createSelect(className, options, required = false) {
   const select = document.createElement("select");
   select.className = className;
@@ -273,6 +451,171 @@ function collectLanguages(card) {
   return selected;
 }
 
+function defaultRepeatUntil(startDate, frequency) {
+  const until = frequency === "annually" ? addYears(startDate, 3) : addYears(startDate, 1);
+  until.setHours(23, 59, 59, 999);
+  return until;
+}
+
+function syncRecurringState(card) {
+  const enabled = card.querySelector(".repeat-enabled")?.checked;
+  const config = card.querySelector(".public-submit-repeat-config");
+  if (!config) return;
+  config.hidden = !enabled;
+  if (!enabled) return;
+
+  const frequency = card.querySelector(".repeat-frequency")?.value || "weekly";
+  card.querySelector(".repeat-panel-weekly")?.toggleAttribute("hidden", frequency !== "weekly");
+  card.querySelector(".repeat-panel-monthly")?.toggleAttribute("hidden", frequency !== "monthly");
+  card.querySelector(".repeat-panel-annual")?.toggleAttribute("hidden", frequency !== "annually");
+  card.querySelector(".repeat-panel-specific")?.toggleAttribute("hidden", frequency !== "specific_dates");
+
+  const untilWrap = card.querySelector(".repeat-until-wrap");
+  if (untilWrap) untilWrap.hidden = frequency === "specific_dates";
+
+  const startValue = card.querySelector(".date-start")?.value || "";
+  const startDate = startValue ? new Date(startValue) : null;
+  if (startDate && !Number.isNaN(startDate.getTime())) {
+    const monthlyInput = card.querySelector(".repeat-month-day");
+    if (monthlyInput && !monthlyInput.value) {
+      monthlyInput.value = String(startDate.getDate());
+    }
+
+    const weekdayInputs = Array.from(card.querySelectorAll(".repeat-weekday"));
+    if (frequency === "weekly" && weekdayInputs.length && !weekdayInputs.some((input) => input.checked)) {
+      const matching = weekdayInputs.find((input) => Number(input.value) === startDate.getDay());
+      if (matching) matching.checked = true;
+    }
+
+    if (frequency === "specific_dates") {
+      const list = card.querySelector(".repeat-specific-dates");
+      if (list && list.querySelectorAll(".repeat-specific-date-row").length === 0) {
+        addSpecificDateRow(list, toDateOnlyValue(startDate));
+      }
+    }
+  }
+
+  const addDateButton = card.querySelector(".repeat-add-date");
+  const specificRows = card.querySelectorAll(".repeat-specific-date-row").length;
+  if (addDateButton) addDateButton.disabled = specificRows >= MAX_SPECIFIC_REPEAT_DATES;
+
+  const helper = card.querySelector(".repeat-helper");
+  if (helper) {
+    helper.textContent = frequency === "annually"
+      ? "If you leave this blank, the event repeats for 3 years."
+      : frequency === "specific_dates"
+        ? "Choose up to 10 occurrence dates. The event time stays the same."
+        : "If you leave this blank, the event repeats for 1 year.";
+  }
+}
+
+function buildRecurringEvents(card, basePayload, rowLabel) {
+  const enabled = card.querySelector(".repeat-enabled")?.checked;
+  if (!enabled) return { events: [basePayload] };
+
+  const baseStart = new Date(basePayload.date_start);
+  const baseEnd = new Date(basePayload.date_end);
+  if (Number.isNaN(baseStart.getTime()) || Number.isNaN(baseEnd.getTime()) || baseEnd < baseStart) {
+    return { error: `${rowLabel} has invalid start/end times for recurrence.` };
+  }
+
+  const durationMs = baseEnd.getTime() - baseStart.getTime();
+  const frequency = card.querySelector(".repeat-frequency")?.value || "weekly";
+  const untilInput = String(card.querySelector(".repeat-until")?.value || "").trim();
+  const explicitUntil = untilInput ? new Date(`${untilInput}T23:59:59`) : null;
+  const until = explicitUntil && !Number.isNaN(explicitUntil.getTime()) ? explicitUntil : defaultRepeatUntil(baseStart, frequency);
+
+  if (frequency !== "specific_dates" && until < baseStart) {
+    return { error: `${rowLabel} has a repeat end date before the event starts.` };
+  }
+
+  const occurrences = [];
+  const seen = new Set();
+
+  function pushOccurrence(startDate) {
+    const key = startDate.toISOString();
+    if (seen.has(key)) return;
+    seen.add(key);
+    occurrences.push({
+      ...basePayload,
+      date_start: startDate.toISOString(),
+      date_end: new Date(startDate.getTime() + durationMs).toISOString()
+    });
+  }
+
+  if (frequency === "weekly") {
+    const selectedDays = Array.from(card.querySelectorAll(".repeat-weekday:checked")).map((input) => Number(input.value));
+    if (!selectedDays.length) return { error: `${rowLabel} needs at least one weekday selected.` };
+
+    let cursor = new Date(baseStart);
+    cursor.setHours(0, 0, 0, 0);
+    let guard = 0;
+    while (cursor <= until && guard < 370) {
+      if (selectedDays.includes(cursor.getDay())) {
+        const occurrenceStart = new Date(cursor);
+        occurrenceStart.setHours(baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds(), baseStart.getMilliseconds());
+        if (occurrenceStart >= baseStart && occurrenceStart <= until) {
+          pushOccurrence(occurrenceStart);
+        }
+      }
+      cursor = addDays(cursor, 1);
+      guard += 1;
+    }
+  } else if (frequency === "monthly") {
+    const dayValue = Number(card.querySelector(".repeat-month-day")?.value || baseStart.getDate());
+    if (!dayValue || dayValue < 1 || dayValue > 31) {
+      return { error: `${rowLabel} needs a valid day of the month.` };
+    }
+
+    let year = baseStart.getFullYear();
+    let month = baseStart.getMonth();
+    let guard = 0;
+    while (guard < 24) {
+      const day = Math.min(dayValue, daysInMonth(year, month));
+      const occurrenceStart = new Date(year, month, day, baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds(), baseStart.getMilliseconds());
+      if (occurrenceStart >= baseStart && occurrenceStart <= until) {
+        pushOccurrence(occurrenceStart);
+      }
+      if (occurrenceStart > until) break;
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+      guard += 1;
+    }
+  } else if (frequency === "annually") {
+    let year = baseStart.getFullYear();
+    let guard = 0;
+    while (guard < 5) {
+      const day = Math.min(baseStart.getDate(), daysInMonth(year, baseStart.getMonth()));
+      const occurrenceStart = new Date(year, baseStart.getMonth(), day, baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds(), baseStart.getMilliseconds());
+      if (occurrenceStart >= baseStart && occurrenceStart <= until) {
+        pushOccurrence(occurrenceStart);
+      }
+      if (occurrenceStart > until) break;
+      year += 1;
+      guard += 1;
+    }
+  } else if (frequency === "specific_dates") {
+    const dates = [...new Set(Array.from(card.querySelectorAll(".repeat-specific-date")).map((input) => String(input.value || "").trim()).filter(Boolean))];
+    if (!dates.length) return { error: `${rowLabel} needs at least one specific date.` };
+    if (dates.length > MAX_SPECIFIC_REPEAT_DATES) return { error: `${rowLabel} can only include up to ${MAX_SPECIFIC_REPEAT_DATES} specific dates.` };
+    dates.sort().forEach((dateValue) => {
+      const occurrenceStart = combineDateWithTime(dateValue, baseStart);
+      if (occurrenceStart && !Number.isNaN(occurrenceStart.getTime())) {
+        pushOccurrence(occurrenceStart);
+      }
+    });
+  }
+
+  if (!occurrences.length) {
+    return { error: `${rowLabel} did not generate any recurring dates. Check the repeat settings.` };
+  }
+
+  return { events: occurrences.sort((a, b) => new Date(a.date_start) - new Date(b.date_start)) };
+}
+
 function addRow() {
   if (rowsBody.querySelectorAll(".public-submit-card").length >= MAX_ROWS) return;
 
@@ -307,6 +650,7 @@ function addRow() {
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
   const languageField = createLanguageField();
+  const recurringField = createRecurringField();
   const priceTypeSelect = createSelect("price-type", PRICE_TYPE_OPTIONS, true);
   const priceMinInput = createInput("number", "price-min", "Minimum price");
   priceMinInput.step = "0.01";
@@ -327,6 +671,7 @@ function addRow() {
     createField("Start *", startInput),
     createField("End *", endInput),
     languageField,
+    recurringField,
     createField("Paid / Free *", priceTypeSelect),
     createField("Min price", priceMinInput),
     createField("Max price", priceMaxInput),
@@ -342,9 +687,13 @@ function addRow() {
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
   imageFileInput.addEventListener("change", () => syncImageState(card));
   card.querySelector(".language-other-toggle")?.addEventListener("change", () => syncLanguageState(card));
+  card.querySelector(".repeat-enabled")?.addEventListener("change", () => syncRecurringState(card));
+  card.querySelector(".repeat-frequency")?.addEventListener("change", () => syncRecurringState(card));
+  startInput.addEventListener("change", () => syncRecurringState(card));
   syncPriceState(card);
   syncImageState(card);
   syncLanguageState(card);
+  syncRecurringState(card);
   reindex();
 }
 
@@ -427,7 +776,7 @@ async function submitRows() {
       }
     }
 
-    payloads.push({
+    const basePayload = {
       status: "pending",
       title_en: title,
       description_en: description,
@@ -448,7 +797,19 @@ async function submitRows() {
       submitter_name: submitterName.value.trim(),
       submitter_email: submitterEmail.value.trim(),
       submitter_note: submitterNote.value.trim()
-    });
+    };
+
+    const recurring = buildRecurringEvents(card, basePayload, rowNo);
+    if (recurring.error) {
+      setStatus(recurring.error, "error");
+      return;
+    }
+
+    payloads.push(...recurring.events);
+    if (payloads.length > MAX_GENERATED_EVENTS) {
+      setStatus(`This submission expands to more than ${MAX_GENERATED_EVENTS} events. Please shorten the repeat range or submit fewer rows.`, "error");
+      return;
+    }
   }
 
   const response = await fetch(`${ADMIN_API_URL}/v1/public-submissions`, {

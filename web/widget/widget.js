@@ -192,6 +192,32 @@ function safeUrl(value) {
   }
 }
 
+function googleMapsUrl(location, area = "") {
+  const query = [String(location || "").trim(), String(area || "").trim(), "Albania"]
+    .filter(Boolean)
+    .join(", ");
+  if (!query) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function linkifyText(value) {
+  const input = String(value || "");
+  const urlPattern = /(https?:\/\/[^\s<]+)/g;
+  let lastIndex = 0;
+  let html = "";
+  input.replace(urlPattern, (match, _capture, offset) => {
+    html += escapeHtml(input.slice(lastIndex, offset));
+    const safe = safeUrl(match);
+    html += safe
+      ? `<a href="${safe}" target="_blank" rel="noreferrer">${escapeHtml(match)}</a>`
+      : escapeHtml(match);
+    lastIndex = offset + match.length;
+    return match;
+  });
+  html += escapeHtml(input.slice(lastIndex));
+  return html.replace(/\n/g, "<br />");
+}
+
 function openModal(html) {
   modalBody.innerHTML = html;
   eventModal.classList.remove("hidden");
@@ -204,15 +230,20 @@ function closeModal() {
 
 function eventDetailHtml(event) {
   const title = escapeHtml(pickText(event, "title") || "Untitled");
-  const description = escapeHtml(pickText(event, "description") || "");
-  const location = escapeHtml(pickText(event, "location") || event.area || "");
+  const rawLocation = pickText(event, "location") || event.area || "";
+  const description = linkifyText(pickText(event, "description") || "");
+  const location = escapeHtml(rawLocation);
   const date = formatDateRange(event.date_start, event.date_end);
   const languages = escapeHtml((event.event_language || []).join(", "));
   const price = escapeHtml(formatPrice(event));
   const ticketUrl = safeUrl(event.ticket_url);
-  const link = ticketUrl
-    ? `<p><a href="${ticketUrl}" target="_blank" rel="noreferrer">Tickets / RSVP</a></p>`
-    : "";
+  const sourceUrl = safeUrl(event.source_url);
+  const mapsUrl = safeUrl(googleMapsUrl(rawLocation, event.area));
+  const links = [
+    ticketUrl ? `<a href="${ticketUrl}" target="_blank" rel="noreferrer">Tickets / RSVP</a>` : "",
+    sourceUrl ? `<a href="${sourceUrl}" target="_blank" rel="noreferrer">Website</a>` : "",
+    mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noreferrer">Google Maps</a>` : ""
+  ].filter(Boolean).join(" · ");
   const imageUrl = safeUrl(event.event_image_url);
   const image = imageUrl
     ? `<img class="modal-poster" src="${imageUrl}" alt="${title}" loading="lazy" />`
@@ -229,7 +260,7 @@ function eventDetailHtml(event) {
       <span>Languages: ${languages}</span>
       <span>Price: ${price}</span>
     </div>
-    ${link}
+    ${links ? `<p>${links}</p>` : ""}
   `;
 }
 
@@ -422,7 +453,10 @@ function renderEvents() {
     const title = document.createElement("h3");
     title.textContent = pickText(event, "title");
     const desc = document.createElement("p");
-    desc.textContent = pickText(event, "description");
+    desc.innerHTML = linkifyText(pickText(event, "description"));
+    desc.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
+    });
     const image = document.createElement("img");
     const eventImageUrl = safeUrl(event.event_image_url);
     if (eventImageUrl) {
@@ -443,6 +477,8 @@ function renderEvents() {
 
     const actions = document.createElement("div");
     const ticketUrl = safeUrl(event.ticket_url);
+    const sourceUrl = safeUrl(event.source_url);
+    const mapsUrl = safeUrl(googleMapsUrl(pickText(event, "location") || event.area, event.area));
     if (ticketUrl) {
       const link = document.createElement("a");
       link.href = ticketUrl;
@@ -451,6 +487,28 @@ function renderEvents() {
       link.textContent = "Tickets / RSVP";
       link.style.color = "var(--brand)";
       link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
+      actions.appendChild(link);
+    }
+    if (sourceUrl) {
+      const link = document.createElement("a");
+      link.href = sourceUrl;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = "Website";
+      link.style.color = "var(--brand)";
+      link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
+      if (actions.childNodes.length) actions.append(" · ");
+      actions.appendChild(link);
+    }
+    if (mapsUrl) {
+      const link = document.createElement("a");
+      link.href = mapsUrl;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = "Map";
+      link.style.color = "var(--brand)";
+      link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
+      if (actions.childNodes.length) actions.append(" · ");
       actions.appendChild(link);
     }
 
