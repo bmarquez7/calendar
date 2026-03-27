@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
+import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,14 @@ const {
   SUPABASE_ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY,
   APP_ORIGIN = "*",
-  OWNER_EMAIL = ""
+  OWNER_EMAIL = "",
+  SMTP_HOST = "",
+  SMTP_PORT = "587",
+  SMTP_SECURE = "false",
+  SMTP_USER = "",
+  SMTP_PASS = "",
+  SMTP_FROM = "",
+  NOTIFY_EMAILS = ""
 } = process.env;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -31,6 +39,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(__dirname, "..", "web");
 let lastCleanupRunAt = 0;
 let cleanupPromise = null;
+const emailRecipients = [...new Set((NOTIFY_EMAILS || OWNER_EMAIL || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean))];
+const mailTransport = SMTP_HOST && SMTP_FROM
+  ? nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: Number(SMTP_PORT || 587),
+      secure: String(SMTP_SECURE).toLowerCase() === "true",
+      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined
+    })
+  : null;
 
 await app.register(cors, {
   origin: APP_ORIGIN === "*" ? true : APP_ORIGIN,
@@ -67,6 +87,130 @@ async function getRole(user) {
 
 function canRole(actorRole, minRole) {
   return (ROLE_RANK[actorRole] || 0) >= (ROLE_RANK[minRole] || 0);
+}
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeSubmissionRow(row) {
+  return {
+    status: "pending",
+    title_en: String(row?.title_en || "").trim(),
+    title_es: row?.title_es ? String(row.title_es).trim() : null,
+    title_sq: row?.title_sq ? String(row.title_sq).trim() : null,
+    description_en: String(row?.description_en || "").trim(),
+    description_es: row?.description_es ? String(row.description_es).trim() : null,
+    description_sq: row?.description_sq ? String(row.description_sq).trim() : null,
+    location_en: row?.location_en ? String(row.location_en).trim() : null,
+    location_es: row?.location_es ? String(row.location_es).trim() : null,
+    location_sq: row?.location_sq ? String(row.location_sq).trim() : null,
+    event_type: String(row?.event_type || "").trim(),
+    area: String(row?.area || "").trim(),
+    event_language: toArray(row?.event_language).map((value) => String(value).trim()).filter(Boolean),
+    date_start: row?.date_start || null,
+    date_end: row?.date_end || null,
+    price_type: String(row?.price_type || "").trim(),
+    price_min: row?.price_min ?? null,
+    price_max: row?.price_max ?? null,
+    currency: row?.currency ? String(row.currency).trim() : "ALL",
+    ticket_url: row?.ticket_url ? String(row.ticket_url).trim() : null,
+    event_image_url: row?.event_image_url ? String(row.event_image_url).trim() : null,
+    organizer_name: row?.organizer_name ? String(row.organizer_name).trim() : null,
+    organizer_email: row?.organizer_email ? String(row.organizer_email).trim() : null,
+    submitter_name: row?.submitter_name ? String(row.submitter_name).trim() : null,
+    submitter_email: row?.submitter_email ? String(row.submitter_email).trim() : null,
+    submitter_note: row?.submitter_note ? String(row.submitter_note).trim() : null,
+    source_url: row?.source_url ? String(row.source_url).trim() : null,
+    is_highlighted: false
+  };
+}
+
+function validateSubmissionRow(row, index) {
+  const required = [
+    row.title_en,
+    row.description_en,
+    row.location_en,
+    row.event_type,
+    row.area,
+    row.date_start,
+    row.date_end,
+    row.price_type,
+    row.currency
+  ];
+  if (required.some((value) => !value)) {
+    return `Event ${index + 1} is missing required fields.`;
+  }
+  if (!row.event_language.length) {
+    return `Event ${index + 1} must include at least one language.`;
+  }
+  if (row.price_type !== "Free" && (row.price_min === null || row.price_min === "" || row.price_max === null || row.price_max === "")) {
+    return `Event ${index + 1} needs min and max prices unless it is Free.`;
+  }
+  return "";
+}
+
+async function sendMailSafe(message) {
+  if (!mailTransport || !SMTP_FROM) return;
+  try {
+    await mailTransport.sendMail(message);
+  } catch (error) {
+    app.log.error({ err: error }, "Email send failed");
+  }
+}
+
+async function notifyAdminOfSubmission(insertedRows) {
+  if (!emailRecipients.length) return;
+  const lines = insertedRows.map((row) => {
+    const dateLabel = row.date_start ? new Date(row.date_start).toLocaleString("en-GB", { timeZone: "Europe/Tirane" }) : "Unknown date";
+    return `- ${row.title_en} | ${dateLabel} | ${row.area}`;
+  });
+
+  await sendMailSafe({
+    from: SMTP_FROM,
+    to: emailRecipients.join(", "),
+    subject: `Calendar submission pending approval (${insertedRows.length})`,
+    text: [
+      "A new public submission is waiting for approval.",
+      "",
+      ...lines,
+      "",
+      `Review in admin: ${APP_ORIGIN === "*" ? "" : `${APP_ORIGIN}/admin/`}`
+    ].join("\n")
+  });
+}
+
+async function sendConfirmationEmails(insertedRows) {
+  const grouped = new Map();
+
+  insertedRows.forEach((row) => {
+    [row.submitter_email, row.organizer_email].forEach((email) => {
+      const normalized = String(email || "").trim().toLowerCase();
+      if (!normalized) return;
+      const list = grouped.get(normalized) || [];
+      list.push(row.title_en);
+      grouped.set(normalized, list);
+    });
+  });
+
+  await Promise.all(
+    [...grouped.entries()].map(([email, titles]) =>
+      sendMailSafe({
+        from: SMTP_FROM,
+        to: email,
+        subject: "We received your Grow Albania event submission",
+        text: [
+          "Thanks for your submission.",
+          "Your event is now pending admin approval.",
+          "",
+          "Submitted events:",
+          ...titles.map((title) => `- ${title}`),
+          "",
+          "You will need to contact the site admin directly for edits before approval."
+        ].join("\n")
+      })
+    )
+  );
 }
 
 async function cleanupExpiredEvents() {
@@ -106,7 +250,7 @@ function maybeRunCleanup(force = false) {
 app.addHook("preHandler", async (request, reply) => {
   const path = request.raw.url || "";
   if (!path.startsWith("/v1/")) return;
-  if (request.routerPath === "/v1/health") return;
+  if (path.startsWith("/v1/health") || path.startsWith("/v1/public-submissions")) return;
   const auth = request.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) {
@@ -153,6 +297,31 @@ app.get("/admin/", async (_, reply) => {
 app.get("/v1/me/role", async (request, reply) => {
   if (!request.user) return reply.code(401).send({ error: "Unauthorized" });
   return { role: request.role };
+});
+
+app.post("/v1/public-submissions", async (request, reply) => {
+  const submittedEvents = Array.isArray(request.body?.events) ? request.body.events : [];
+  if (!submittedEvents.length) return reply.code(400).send({ error: "At least one event is required" });
+  if (submittedEvents.length > 10) return reply.code(400).send({ error: "Maximum 10 events per submission" });
+
+  const normalized = submittedEvents.map(normalizeSubmissionRow);
+  for (let i = 0; i < normalized.length; i += 1) {
+    const validationError = validateSubmissionRow(normalized[i], i);
+    if (validationError) {
+      return reply.code(400).send({ error: validationError });
+    }
+  }
+
+  const inserted = await serviceClient.from("events").insert(normalized).select("*");
+  if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
+
+  const rows = inserted.data || [];
+  await Promise.all([
+    notifyAdminOfSubmission(rows),
+    sendConfirmationEmails(rows)
+  ]);
+
+  return { ok: true, inserted: rows.length };
 });
 
 app.get("/v1/users", async (request, reply) => {

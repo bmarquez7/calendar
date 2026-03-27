@@ -58,6 +58,12 @@ const ROLE_RANK = {
   owner: 3
 };
 
+const EVENT_STATUS_RANK = {
+  pending: 0,
+  approved: 1,
+  denied: 2
+};
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -484,7 +490,13 @@ async function loadEvents() {
     setStatus(loginStatus, `Load failed: ${error.message}`);
     return;
   }
-  currentEvents = data || [];
+  currentEvents = (data || []).sort((a, b) => {
+    const statusDiff = (EVENT_STATUS_RANK[a.status] ?? 99) - (EVENT_STATUS_RANK[b.status] ?? 99);
+    if (statusDiff !== 0) return statusDiff;
+    const createdDiff = new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (createdDiff !== 0) return createdDiff;
+    return new Date(a.date_start || 0) - new Date(b.date_start || 0);
+  });
   renderTable();
 }
 

@@ -37,6 +37,14 @@ This package contains only the calendar app components, isolated from other loca
    - `SUPABASE_ANON_KEY`
    - `EVENT_IMAGE_BUCKET` (default `event-posters`)
    - `ADMIN_API_URL` (set to your admin API Render URL)
+6. To enable email notifications and confirmations on public submissions, configure these Render env vars on the Node service:
+   - `NOTIFY_EMAILS` (comma-separated admin emails; falls back to `OWNER_EMAIL`)
+   - `SMTP_HOST`
+   - `SMTP_PORT`
+   - `SMTP_SECURE` (`true` or `false`)
+   - `SMTP_USER`
+   - `SMTP_PASS`
+   - `SMTP_FROM`
 
 ## Seed owner role
 1. Sign in once in admin so your user exists in `auth.users`.

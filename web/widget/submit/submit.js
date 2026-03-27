@@ -1,5 +1,5 @@
 import { createClient } from "../../shared/vendor.js";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET } from "../../shared/config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../../shared/config.js";
 import { EVENT_TYPES, AREAS, LANGS } from "../../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -373,9 +373,17 @@ async function submitRows() {
     });
   }
 
-  const { error } = await client.from("events").insert(payloads);
-  if (error) {
-    setStatus(error.message, "error");
+  const response = await fetch(`${ADMIN_API_URL}/v1/public-submissions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ events: payloads })
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setStatus(result?.error || `HTTP ${response.status}`, "error");
     return;
   }
 
