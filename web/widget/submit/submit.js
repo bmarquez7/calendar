@@ -34,6 +34,10 @@ const descriptionModal = document.getElementById("description-modal");
 const descriptionEditor = document.getElementById("description-editor");
 const descriptionCounter = document.getElementById("description-counter");
 const descriptionDoneButton = document.getElementById("description-done");
+const pickerModal = document.getElementById("picker-modal");
+const pickerModalTitle = document.getElementById("picker-modal-title");
+const pickerModalBody = document.getElementById("picker-modal-body");
+const pickerDoneButton = document.getElementById("picker-done");
 
 const submitterName = document.getElementById("submitter-name");
 const submitterEmail = document.getElementById("submitter-email");
@@ -42,6 +46,7 @@ const organizerEmail = document.getElementById("organizer-email");
 const submitterNote = document.getElementById("submitter-note");
 
 let activeDescriptionInput = null;
+let activePickerState = null;
 
 function setStatus(message, kind = "info") {
   statusBox.style.display = "block";
@@ -190,6 +195,7 @@ function syncDescriptionButton(input) {
 }
 
 function openDescriptionModal(input) {
+  if (activePickerState) closePickerModal(true);
   activeDescriptionInput = input;
   descriptionEditor.value = input.value || "";
   setDescriptionCounter(descriptionEditor.value);
@@ -227,6 +233,29 @@ function createDescriptionField() {
   return wrap;
 }
 
+function resolveEditorScope(field, panelClass) {
+  const localPanel = field.querySelector(`.${panelClass}`);
+  if (localPanel) return localPanel;
+  if (activePickerState?.field === field && activePickerState.panel?.classList.contains(panelClass)) {
+    return activePickerState.panel;
+  }
+  return field;
+}
+
+function languageDisplayLabel(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  const match = LANGS.find((lang) => lang.code === trimmed);
+  return match ? match.label : trimmed;
+}
+
+function languageSummary(scope) {
+  const values = collectLanguages(scope).map(languageDisplayLabel);
+  if (!values.length) return "Select languages";
+  if (values.length <= 2) return values.join(", ");
+  return `${values.slice(0, 2).join(", ")} +${values.length - 2}`;
+}
+
 function createLanguageField() {
   const wrap = document.createElement("div");
   wrap.className = "public-submit-field public-submit-language-field";
@@ -235,10 +264,19 @@ function createLanguageField() {
   label.className = "public-submit-label";
   label.textContent = "Languages *";
 
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "public-submit-launch language-launch";
+  button.textContent = "Select languages";
+
+  const editor = document.createElement("div");
+  editor.className = "picker-editor-panel language-editor-panel";
+  editor.hidden = true;
+
   const select = document.createElement("select");
   select.className = "language-select";
   select.multiple = true;
-  select.size = 1;
+  select.size = 8;
   createOptionElements(select, [
     ...LANGS.map((lang) => ({ value: lang.code, label: lang.label })),
     { value: "other", label: "Other" }
@@ -252,7 +290,21 @@ function createLanguageField() {
   otherInput.disabled = true;
 
   otherRow.append(otherInput);
-  wrap.append(label, select, help, otherRow);
+  editor.append(select, help, otherRow);
+  wrap.append(label, button, editor);
+
+  button.addEventListener("click", () => {
+    openPickerModal("Languages", wrap, editor, () => {
+      syncLanguageState(editor);
+      syncLanguageLaunch(wrap);
+    });
+  });
+  select.addEventListener("change", () => {
+    syncLanguageState(editor);
+    syncLanguageLaunch(wrap);
+  });
+  otherInput.addEventListener("input", () => syncLanguageLaunch(wrap));
+  syncLanguageLaunch(wrap);
   return wrap;
 }
 
@@ -373,16 +425,62 @@ function addSpecificDateRow(list, initialValue = "") {
   list.appendChild(row);
 }
 
+function repeatSummary(scope) {
+  const enabled = scope.querySelector(".repeat-enabled")?.checked;
+  if (!enabled) return "No repeat";
+  const frequency = scope.querySelector(".repeat-frequency")?.value || "weekly";
+  const until = String(scope.querySelector(".repeat-until")?.value || "").trim();
+  let summary = "No repeat";
+
+  if (frequency === "weekly") {
+    const days = Array.from(scope.querySelectorAll(".repeat-weekday:checked")).map((input) => {
+      const match = WEEKDAY_OPTIONS.find((day) => String(day.value) === input.value);
+      return match ? match.label : input.value;
+    });
+    summary = days.length ? `Weekly • ${days.join(", ")}` : "Weekly";
+  } else if (frequency === "monthly") {
+    const day = scope.querySelector(".repeat-month-day")?.value || "";
+    summary = day ? `Monthly • Day ${day}` : "Monthly";
+  } else if (frequency === "annually") {
+    summary = "Annually";
+  } else if (frequency === "specific_dates") {
+    const count = Array.from(scope.querySelectorAll(".repeat-specific-date"))
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean).length;
+    summary = count ? `Specific dates • ${count} selected` : "Specific dates";
+  }
+
+  return until ? `${summary} • until ${until}` : summary;
+}
+
+function syncLanguageLaunch(scope) {
+  const source = resolveEditorScope(scope, "language-editor-panel");
+  const button = scope.querySelector(".language-launch");
+  if (!button) return;
+  const summary = languageSummary(source);
+  button.textContent = summary;
+  button.classList.toggle("is-filled", summary !== "Select languages");
+}
+
 function createRecurringFields() {
-  const toggleField = document.createElement("label");
-  toggleField.className = "public-submit-field public-submit-repeat-toggle-field";
+  const wrap = document.createElement("div");
+  wrap.className = "public-submit-field public-submit-repeat-launch-field";
 
-  const toggleLabel = document.createElement("span");
-  toggleLabel.className = "public-submit-label";
-  toggleLabel.textContent = "Repeating event?";
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Repeating event?";
 
-  const toggleControl = document.createElement("span");
-  toggleControl.className = "repeat-toggle-control";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "public-submit-launch repeat-launch";
+  button.textContent = "No repeat";
+
+  const editor = document.createElement("div");
+  editor.className = "picker-editor-panel repeat-editor-panel";
+  editor.hidden = true;
+
+  const toggleControl = document.createElement("label");
+  toggleControl.className = "repeat-toggle-control repeat-toggle-control-inline";
   const toggle = document.createElement("input");
   toggle.type = "checkbox";
   toggle.className = "repeat-enabled";
@@ -390,11 +488,7 @@ function createRecurringFields() {
   toggleText.className = "repeat-toggle-text";
   toggleText.textContent = "Repeat this event";
   toggleControl.append(toggle, toggleText);
-  toggleField.append(toggleLabel, toggleControl);
 
-  const configField = document.createElement("div");
-  configField.className = "public-submit-field public-submit-repeat-field";
-  configField.hidden = true;
   const config = document.createElement("div");
   config.className = "public-submit-repeat-config";
 
@@ -476,8 +570,21 @@ function createRecurringFields() {
     untilWrap
   );
 
-  configField.append(config);
-  return { toggleField, configField };
+  editor.append(toggleControl, config);
+  wrap.append(label, button, editor);
+
+  button.addEventListener("click", () => {
+    openPickerModal("Repeating event", wrap, editor, () => syncRecurringState(wrap));
+  });
+  toggle.addEventListener("change", () => syncRecurringState(wrap));
+  frequencySelect.addEventListener("change", () => syncRecurringState(wrap));
+  monthlyInput.addEventListener("input", () => syncRecurringState(wrap));
+  untilInput.addEventListener("input", () => syncRecurringState(wrap));
+  Array.from(weeklyOptions.querySelectorAll(".repeat-weekday")).forEach((input) => {
+    input.addEventListener("change", () => syncRecurringState(wrap));
+  });
+  button.classList.remove("is-filled");
+  return wrap;
 }
 
 function createSelect(className, options, required = false) {
@@ -529,10 +636,10 @@ function syncImageState(card) {
   renderFeaturedImageChoices(card, files);
 }
 
-function syncLanguageState(card) {
-  const select = card.querySelector(".language-select");
-  const otherInput = card.querySelector(".language-other-input");
-  const otherRow = card.querySelector(".public-submit-language-other");
+function syncLanguageState(scope) {
+  const select = scope.querySelector(".language-select");
+  const otherInput = scope.querySelector(".language-other-input");
+  const otherRow = scope.querySelector(".public-submit-language-other");
   if (!select || !otherInput || !otherRow) return;
   const hasOther = Array.from(select.selectedOptions).some((option) => option.value === "other");
   otherRow.hidden = !hasOther;
@@ -560,49 +667,54 @@ function defaultRepeatUntil(startDate, frequency) {
 }
 
 function syncRecurringState(card) {
-  const enabled = card.querySelector(".repeat-enabled")?.checked;
-  const configField = card.querySelector(".public-submit-repeat-field");
-  const config = card.querySelector(".public-submit-repeat-config");
-  if (!configField || !config) return;
-  configField.hidden = !enabled;
-  if (!enabled) return;
+  const editorScope = resolveEditorScope(card, "repeat-editor-panel");
+  const enabled = editorScope.querySelector(".repeat-enabled")?.checked;
+  const config = editorScope.querySelector(".public-submit-repeat-config");
+  const button = card.querySelector(".repeat-launch");
+  if (!config || !button) return;
+  config.hidden = !enabled;
+  if (!enabled) {
+    button.textContent = "No repeat";
+    button.classList.remove("is-filled");
+    return;
+  }
 
-  const frequency = card.querySelector(".repeat-frequency")?.value || "weekly";
-  card.querySelector(".repeat-panel-weekly")?.toggleAttribute("hidden", frequency !== "weekly");
-  card.querySelector(".repeat-panel-monthly")?.toggleAttribute("hidden", frequency !== "monthly");
-  card.querySelector(".repeat-panel-annual")?.toggleAttribute("hidden", frequency !== "annually");
-  card.querySelector(".repeat-panel-specific")?.toggleAttribute("hidden", frequency !== "specific_dates");
+  const frequency = editorScope.querySelector(".repeat-frequency")?.value || "weekly";
+  editorScope.querySelector(".repeat-panel-weekly")?.toggleAttribute("hidden", frequency !== "weekly");
+  editorScope.querySelector(".repeat-panel-monthly")?.toggleAttribute("hidden", frequency !== "monthly");
+  editorScope.querySelector(".repeat-panel-annual")?.toggleAttribute("hidden", frequency !== "annually");
+  editorScope.querySelector(".repeat-panel-specific")?.toggleAttribute("hidden", frequency !== "specific_dates");
 
-  const untilWrap = card.querySelector(".repeat-until-wrap");
+  const untilWrap = editorScope.querySelector(".repeat-until-wrap");
   if (untilWrap) untilWrap.hidden = frequency === "specific_dates";
 
   const startValue = card.querySelector(".date-start")?.value || "";
   const startDate = startValue ? new Date(startValue) : null;
   if (startDate && !Number.isNaN(startDate.getTime())) {
-    const monthlyInput = card.querySelector(".repeat-month-day");
+    const monthlyInput = editorScope.querySelector(".repeat-month-day");
     if (monthlyInput && !monthlyInput.value) {
       monthlyInput.value = String(startDate.getDate());
     }
 
-    const weekdayInputs = Array.from(card.querySelectorAll(".repeat-weekday"));
+    const weekdayInputs = Array.from(editorScope.querySelectorAll(".repeat-weekday"));
     if (frequency === "weekly" && weekdayInputs.length && !weekdayInputs.some((input) => input.checked)) {
       const matching = weekdayInputs.find((input) => Number(input.value) === startDate.getDay());
       if (matching) matching.checked = true;
     }
 
     if (frequency === "specific_dates") {
-      const list = card.querySelector(".repeat-specific-dates");
+      const list = editorScope.querySelector(".repeat-specific-dates");
       if (list && list.querySelectorAll(".repeat-specific-date-row").length === 0) {
         addSpecificDateRow(list, toDateOnlyValue(startDate));
       }
     }
   }
 
-  const addDateButton = card.querySelector(".repeat-add-date");
-  const specificRows = card.querySelectorAll(".repeat-specific-date-row").length;
+  const addDateButton = editorScope.querySelector(".repeat-add-date");
+  const specificRows = editorScope.querySelectorAll(".repeat-specific-date-row").length;
   if (addDateButton) addDateButton.disabled = specificRows >= MAX_SPECIFIC_REPEAT_DATES;
 
-  const helper = card.querySelector(".repeat-helper");
+  const helper = editorScope.querySelector(".repeat-helper");
   if (helper) {
     helper.textContent = frequency === "annually"
       ? "If you leave this blank, the event repeats for 3 years."
@@ -610,6 +722,41 @@ function syncRecurringState(card) {
         ? "Choose up to 10 occurrence dates. The event time stays the same."
         : "If you leave this blank, the event repeats for 1 year.";
   }
+
+  button.textContent = repeatSummary(editorScope);
+  button.classList.toggle("is-filled", enabled);
+}
+
+function resetRecurringSummary(card) {
+  const editorScope = resolveEditorScope(card, "repeat-editor-panel");
+  const button = card.querySelector(".repeat-launch");
+  if (!button) return;
+  const enabled = editorScope.querySelector(".repeat-enabled")?.checked;
+  button.textContent = enabled ? repeatSummary(editorScope) : "No repeat";
+  button.classList.toggle("is-filled", Boolean(enabled));
+}
+
+function openPickerModal(title, field, panel, onDone) {
+  if (!descriptionModal.hidden) closeDescriptionModal(true);
+  if (activePickerState?.panel && activePickerState.panel !== panel) {
+    closePickerModal(true);
+  }
+  activePickerState = { field, panel, onDone };
+  pickerModalTitle.textContent = title;
+  panel.hidden = false;
+  pickerModalBody.append(panel);
+  pickerModal.hidden = false;
+  panel.querySelector("input, select, textarea, button")?.focus();
+}
+
+function closePickerModal(save = true) {
+  if (!activePickerState) return;
+  const { field, panel, onDone } = activePickerState;
+  field.append(panel);
+  panel.hidden = true;
+  pickerModal.hidden = true;
+  activePickerState = null;
+  if (save && typeof onDone === "function") onDone();
 }
 
 function buildRecurringEvents(card, basePayload, rowLabel) {
@@ -756,7 +903,7 @@ function addRow() {
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
   const languageField = createLanguageField();
-  const recurringFields = createRecurringFields();
+  const recurringField = createRecurringFields();
   const priceTypeSelect = createSelect("price-type", PRICE_TYPE_OPTIONS, true);
   const priceMinInput = createInput("number", "price-min", "Minimum price");
   priceMinInput.step = "0.01";
@@ -780,11 +927,10 @@ function addRow() {
     createField("Max price", priceMaxInput),
     createField("Currency *", currencySelect),
     createField("Ticket URL", ticketUrlInput),
+    recurringField,
     imageFields.imageUrlField,
     imageFields.imageFilesField,
-    recurringFields.toggleField,
-    imageFields.featuredField,
-    recurringFields.configField
+    imageFields.featuredField
   );
 
   card.append(header, grid);
@@ -792,14 +938,13 @@ function addRow() {
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
   card.querySelector(".image-files")?.addEventListener("change", () => syncImageState(card));
-  card.querySelector(".language-select")?.addEventListener("change", () => syncLanguageState(card));
-  card.querySelector(".repeat-enabled")?.addEventListener("change", () => syncRecurringState(card));
-  card.querySelector(".repeat-frequency")?.addEventListener("change", () => syncRecurringState(card));
   startInput.addEventListener("change", () => syncRecurringState(card));
   syncPriceState(card);
   syncImageState(card);
   syncLanguageState(card);
   syncRecurringState(card);
+  syncLanguageLaunch(card);
+  resetRecurringSummary(card);
   reindex();
 }
 
@@ -824,6 +969,8 @@ function validateSubmitterInfo() {
 }
 
 async function submitRows() {
+  if (activePickerState) closePickerModal(true);
+  if (!descriptionModal.hidden) closeDescriptionModal(true);
   statusBox.style.display = "none";
   const submitterError = validateSubmitterInfo();
   if (submitterError) {
@@ -956,5 +1103,24 @@ fillRowsButton.addEventListener("click", () => {
 submitButton.addEventListener("click", submitRows);
 descriptionEditor.addEventListener("input", () => setDescriptionCounter(descriptionEditor.value));
 descriptionDoneButton.addEventListener("click", () => closeDescriptionModal(true));
+pickerDoneButton.addEventListener("click", () => closePickerModal(true));
+
+pickerModal.addEventListener("click", (event) => {
+  if (event.target.classList.contains("modal-backdrop")) {
+    closePickerModal(true);
+  }
+});
+
+descriptionModal.addEventListener("click", (event) => {
+  if (event.target.classList.contains("modal-backdrop")) {
+    closeDescriptionModal(true);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!pickerModal.hidden) closePickerModal(true);
+  if (!descriptionModal.hidden) closeDescriptionModal(true);
+});
 
 addRow();
