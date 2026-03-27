@@ -666,6 +666,35 @@ section {
   font-weight: 600;
 }
 
+.admin-poster-cell {
+  width: 88px;
+}
+
+.admin-poster-thumb,
+.admin-poster-empty {
+  width: 60px;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: block;
+}
+
+.admin-poster-thumb {
+  object-fit: contain;
+  background: rgba(11, 18, 27, 0.08);
+}
+
+.admin-poster-empty {
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  background: var(--surface-2);
+  text-align: center;
+}
+
 .batch-grid-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);

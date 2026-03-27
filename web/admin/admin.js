@@ -77,6 +77,18 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function safeUrl(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+  if (input.startsWith("/")) return input;
+  try {
+    const url = new URL(input);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function hasRole(minRole) {
   if (!currentRole) return false;
   return ROLE_RANK[currentRole] >= ROLE_RANK[minRole];
@@ -467,6 +479,7 @@ function renderTable() {
   currentEvents.forEach((event) => {
     const row = document.createElement("tr");
     row.innerHTML = `
+      <td class="admin-poster-cell"></td>
       <td>${escapeHtml(event.title_en || "Untitled")}</td>
       <td><span class="status-pill">${escapeHtml(event.status || "")}</span></td>
       <td>${event.is_highlighted ? '<span class="status-pill">Yes</span>' : "—"}</td>
@@ -476,7 +489,22 @@ function renderTable() {
       <td></td>
     `;
 
+    const posterCell = row.querySelector("td:first-child");
     const actionsCell = row.querySelector("td:last-child");
+    const posterUrl = safeUrl(event.event_image_url);
+    if (posterUrl) {
+      const image = document.createElement("img");
+      image.className = "admin-poster-thumb";
+      image.src = posterUrl;
+      image.alt = event.title_en || "Event poster";
+      image.loading = "lazy";
+      posterCell.appendChild(image);
+    } else {
+      const emptyPoster = document.createElement("span");
+      emptyPoster.className = "admin-poster-empty";
+      emptyPoster.textContent = "No image";
+      posterCell.appendChild(emptyPoster);
+    }
 
     if (hasRole("moderator")) {
       const approve = document.createElement("button");
