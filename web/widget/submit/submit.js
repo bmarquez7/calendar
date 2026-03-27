@@ -1,6 +1,6 @@
 import { createClient } from "../../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../../shared/config.js";
-import { EVENT_TYPES, AREAS, LANGS } from "../../shared/constants.js";
+import { EVENT_TYPES, AREA_GROUPS, LANGS } from "../../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -64,6 +64,13 @@ async function uploadImage(file) {
 
 function createOptionElements(select, options) {
   options.forEach((option) => {
+    if (option?.options) {
+      const group = document.createElement("optgroup");
+      group.label = option.label;
+      createOptionElements(group, option.options);
+      select.appendChild(group);
+      return;
+    }
     const el = document.createElement("option");
     if (typeof option === "string") {
       el.value = option;
@@ -233,7 +240,7 @@ function addRow() {
   const titleInput = createInput("text", "title", "Event title", true);
   const addressInput = createInput("text", "address", "Street address", true);
   const eventTypeSelect = createSelect("event-type", EVENT_TYPES, true);
-  const areaSelect = createSelect("area", AREAS, true);
+  const areaSelect = createSelect("area", AREA_GROUPS, true);
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
   const languageSelect = createSelect("language", LANGS.map((lang) => ({ value: lang.code, label: lang.label })), true);

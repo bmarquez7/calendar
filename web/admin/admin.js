@@ -1,5 +1,6 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../shared/config.js";
+import { AREA_GROUPS, isFeaturedEligibleArea } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -87,6 +88,45 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function appendSelectOptions(select, options) {
+  options.forEach((option) => {
+    if (option?.options) {
+      const group = document.createElement("optgroup");
+      group.label = option.label;
+      appendSelectOptions(group, option.options);
+      select.appendChild(group);
+      return;
+    }
+    const el = document.createElement("option");
+    el.value = option.value ?? option;
+    el.textContent = option.label ?? option;
+    select.appendChild(el);
+  });
+}
+
+function populateGroupedSelect(select, options, placeholder = "") {
+  if (!select) return;
+  select.innerHTML = "";
+  if (placeholder) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = placeholder;
+    select.appendChild(empty);
+  }
+  appendSelectOptions(select, options);
+}
+
+function canFeatureEventArea(area, status = "approved") {
+  return status === "approved" && isFeaturedEligibleArea(area);
+}
+
+function syncEditHighlightAvailability() {
+  const canHighlight = canFeatureEventArea(editForm.area.value, editForm.status.value);
+  editForm.is_highlighted.disabled = !canHighlight;
+  if (!canHighlight) editForm.is_highlighted.checked = false;
+  editForm.is_highlighted.closest(".toggle-field")?.classList.toggle("disabled", !canHighlight);
 }
 
 function hasRole(minRole) {
@@ -281,6 +321,7 @@ function fillEditForm(event) {
   editForm.ticket_url.value = event.ticket_url || "";
   editForm.event_image_url.value = event.event_image_url || "";
   editForm.admin_response_note.value = event.admin_response_note || "";
+  syncEditHighlightAvailability();
 }
 
 function clearFormForNew() {
@@ -289,10 +330,12 @@ function clearFormForNew() {
   editForm.repeat_frequency.value = "none";
   editForm.repeat_until.value = "";
   editForm.status.value = "approved";
+  editForm.area.value = "Skanderbeg Square";
   editForm.is_highlighted.checked = false;
   editForm.price_type.value = "Paid";
   editForm.currency.value = "ALL";
   editForm.admin_response_note.value = "";
+  syncEditHighlightAvailability();
   setStatus(editStatus, "Creating a new event.");
 }
 
@@ -319,7 +362,7 @@ function toPayload(formData) {
     repeat_frequency: formData.get("repeat_frequency") || "none",
     repeat_until: formData.get("repeat_until") || null,
     status,
-    is_highlighted: status === "approved" && formData.get("is_highlighted") === "on",
+    is_highlighted: canFeatureEventArea(formData.get("area"), status) && formData.get("is_highlighted") === "on",
     price_type: formData.get("price_type") || "Paid",
     price_min: formData.get("price_min") || null,
     price_max: formData.get("price_max") || null,
@@ -411,6 +454,11 @@ async function updateStatus(id, status) {
 
 async function toggleHighlight(id, isHighlighted) {
   if (!hasRole("moderator")) return;
+  const targetEvent = currentEvents.find((event) => String(event.id) === String(id));
+  if (isHighlighted && targetEvent && !isFeaturedEligibleArea(targetEvent.area)) {
+    setStatus(editStatus, "Only Tirana events can be featured on the public calendar.", "error");
+    return;
+  }
   const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).eq("id", id);
   if (error) {
     alert(error.message);
@@ -528,7 +576,7 @@ function renderTable() {
 
       actionsCell.append(approve, hold, deny, needsInfo);
 
-      if (event.status === "approved" || event.is_highlighted) {
+      if (canFeatureEventArea(event.area, event.status) || event.is_highlighted) {
         const highlight = document.createElement("button");
         highlight.textContent = event.is_highlighted ? "Unhighlight" : "Highlight";
         highlight.className = "secondary";
@@ -712,6 +760,16 @@ function createBatchCell(type, className, placeholder = "", required = false) {
   return td;
 }
 
+function createBatchSelectCell(className, options, placeholder = "", required = false) {
+  const td = document.createElement("td");
+  const select = document.createElement("select");
+  select.className = className;
+  if (required) select.required = true;
+  populateGroupedSelect(select, options, placeholder);
+  td.appendChild(select);
+  return td;
+}
+
 function createBatchCheckboxCell(className) {
   const td = document.createElement("td");
   const input = document.createElement("input");
@@ -731,7 +789,7 @@ function addBatchRow(prefill = {}) {
   row.appendChild(createBatchCell("text", "batch-description", "Description", true));
   row.appendChild(createBatchCell("text", "batch-location", "Location", true));
   row.appendChild(createBatchCell("text", "batch-type", "Type", true));
-  row.appendChild(createBatchCell("text", "batch-area", "Area", true));
+  row.appendChild(createBatchSelectCell("batch-area", AREA_GROUPS, "Choose area", true));
   row.appendChild(createBatchCell("datetime-local", "batch-date-start", "", true));
   row.appendChild(createBatchCell("datetime-local", "batch-date-end", "", true));
   row.appendChild(createBatchCell("text", "batch-languages", "en,sq", true));
@@ -855,7 +913,7 @@ function collectBatchRowPayload(row) {
       price_max: price_max || null,
       currency,
       status,
-      is_highlighted: status === "approved" ? is_highlighted : false,
+      is_highlighted: canFeatureEventArea(area, status) ? is_highlighted : false,
       ticket_url,
       event_image_url: event_image_url || null
     }
@@ -1111,6 +1169,11 @@ needsInfoEmailButton.addEventListener("click", async () => {
 if (batchRowsBody.querySelectorAll("tr").length === 0) {
   addBatchRow();
 }
+
+populateGroupedSelect(editForm.area, AREA_GROUPS, "Choose area");
+editForm.area.addEventListener("change", syncEditHighlightAvailability);
+editForm.status.addEventListener("change", syncEditHighlightAvailability);
+syncEditHighlightAvailability();
 
 client.auth.onAuthStateChange(async (_evt, session) => {
   setAuthUi(session);

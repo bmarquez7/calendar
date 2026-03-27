@@ -1,6 +1,6 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEFAULT_UI_LANG } from "../shared/config.js";
-import { EVENT_TYPES, AREAS, LANGS } from "../shared/constants.js";
+import { EVENT_TYPES, AREA_GROUPS, LANGS, isFeaturedEligibleArea } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -297,6 +297,18 @@ function createSelect(name, labelText, options, includeAny = true) {
     select.appendChild(opt);
   }
   options.forEach((option) => {
+    if (option?.options) {
+      const group = document.createElement("optgroup");
+      group.label = option.label;
+      option.options.forEach((groupOption) => {
+        const opt = document.createElement("option");
+        opt.value = groupOption.value ?? groupOption;
+        opt.textContent = groupOption.label ?? groupOption;
+        group.appendChild(opt);
+      });
+      select.appendChild(group);
+      return;
+    }
     const opt = document.createElement("option");
     opt.value = option.value ?? option;
     opt.textContent = option.label ?? option;
@@ -333,7 +345,7 @@ function renderFilters() {
   filterControls.append(
     createInput("search", strings.filters.search, "text", "Search titles and descriptions"),
     createSelect("eventType", strings.filters.eventType, EVENT_TYPES.map((t) => ({ value: t, label: t }))),
-    createSelect("area", strings.filters.area, AREAS.map((a) => ({ value: a, label: a }))),
+    createSelect("area", strings.filters.area, AREA_GROUPS),
     createSelect("eventLanguage", strings.filters.eventLanguage, LANGS.map((l) => ({ value: l.code, label: l.label }))),
     createInput("dateFrom", strings.filters.dateFrom, "date"),
     createInput("dateTo", strings.filters.dateTo, "date"),
@@ -384,9 +396,11 @@ function featuredFallbackSort(a, b) {
 
 function getHighlightedEvents() {
   const selected = state.events
-    .filter((event) => event.is_highlighted)
+    .filter((event) => event.is_highlighted && isFeaturedEligibleArea(event.area))
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
-  const fallback = state.events.filter((event) => !event.is_highlighted).sort(featuredFallbackSort);
+  const fallback = state.events
+    .filter((event) => !event.is_highlighted && isFeaturedEligibleArea(event.area))
+    .sort(featuredFallbackSort);
   return [...selected, ...fallback].slice(0, 10);
 }
 
