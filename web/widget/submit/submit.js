@@ -292,8 +292,6 @@ function rowEmpty(card) {
 }
 
 function validateSubmitterInfo() {
-  if (!organizerName.value.trim()) return "Organizer name is required.";
-  if (!organizerEmail.value.trim()) return "Organizer email is required.";
   return "";
 }
 
