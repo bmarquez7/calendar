@@ -192,6 +192,19 @@ function safeUrl(value) {
   }
 }
 
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function getEventImages(event) {
+  const urls = [];
+  [event?.event_image_url, ...toArray(event?.event_image_urls)].forEach((value) => {
+    const safe = safeUrl(value);
+    if (safe && !urls.includes(safe)) urls.push(safe);
+  });
+  return urls;
+}
+
 function googleMapsUrl(location, area = "") {
   const query = [String(location || "").trim(), String(area || "").trim(), "Albania"]
     .filter(Boolean)
@@ -218,9 +231,13 @@ function linkifyText(value) {
   return html.replace(/\n/g, "<br />");
 }
 
-function openModal(html) {
+function openModal(content) {
+  const html = typeof content === "string" ? content : content?.html || "";
   modalBody.innerHTML = html;
   eventModal.classList.remove("hidden");
+  if (content && typeof content.onOpen === "function") {
+    content.onOpen();
+  }
 }
 
 function closeModal() {
@@ -228,8 +245,58 @@ function closeModal() {
   modalBody.innerHTML = "";
 }
 
+function buildModalGallery(images, title) {
+  if (!images.length) return "";
+  const controls = images.length > 1
+    ? `
+      <button type="button" class="modal-gallery-arrow modal-gallery-arrow-prev" data-gallery-prev aria-label="Previous image">←</button>
+      <button type="button" class="modal-gallery-arrow modal-gallery-arrow-next" data-gallery-next aria-label="Next image">→</button>
+      <div class="modal-gallery-counter" data-gallery-counter>1 / ${images.length}</div>
+    `
+    : "";
+  return `
+    <div class="modal-gallery">
+      <div class="modal-gallery-frame">
+        <img class="modal-poster modal-gallery-image" data-gallery-image src="${images[0]}" alt="${title}" loading="lazy" />
+        ${controls}
+      </div>
+    </div>
+  `;
+}
+
+function mountModalGallery(images, titleText) {
+  if (images.length <= 1) return;
+  const image = modalBody.querySelector("[data-gallery-image]");
+  const counter = modalBody.querySelector("[data-gallery-counter]");
+  const prev = modalBody.querySelector("[data-gallery-prev]");
+  const next = modalBody.querySelector("[data-gallery-next]");
+  if (!image || !counter || !prev || !next) return;
+
+  let index = 0;
+  const render = () => {
+    image.src = images[index];
+    image.alt = `${titleText} image ${index + 1} of ${images.length}`;
+    counter.textContent = `${index + 1} / ${images.length}`;
+  };
+
+  prev.addEventListener("click", (event) => {
+    event.stopPropagation();
+    index = (index - 1 + images.length) % images.length;
+    render();
+  });
+
+  next.addEventListener("click", (event) => {
+    event.stopPropagation();
+    index = (index + 1) % images.length;
+    render();
+  });
+
+  render();
+}
+
 function eventDetailHtml(event) {
-  const title = escapeHtml(pickText(event, "title") || "Untitled");
+  const titleText = pickText(event, "title") || "Untitled";
+  const title = escapeHtml(titleText);
   const rawLocation = pickText(event, "location") || event.area || "";
   const description = linkifyText(pickText(event, "description") || "");
   const location = escapeHtml(rawLocation);
@@ -244,24 +311,25 @@ function eventDetailHtml(event) {
     sourceUrl ? `<a href="${sourceUrl}" target="_blank" rel="noreferrer">Website</a>` : "",
     mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noreferrer">Google Maps</a>` : ""
   ].filter(Boolean).join(" · ");
-  const imageUrl = safeUrl(event.event_image_url);
-  const image = imageUrl
-    ? `<img class="modal-poster" src="${imageUrl}" alt="${title}" loading="lazy" />`
-    : "";
-
-  return `
-    <h3 id="modal-title">${title}</h3>
-    ${image}
-    <p>${description}</p>
-    <div class="meta">
-      <span>Location: ${location}</span>
-      <span>Date: ${escapeHtml(date)}</span>
-      <span>Type: ${escapeHtml(event.event_type || "")}</span>
-      <span>Languages: ${languages}</span>
-      <span>Price: ${price}</span>
-    </div>
-    ${links ? `<p>${links}</p>` : ""}
-  `;
+  const images = getEventImages(event);
+  return {
+    html: `
+      <h3 id="modal-title">${title}</h3>
+      ${buildModalGallery(images, title)}
+      <p>${description}</p>
+      <div class="meta">
+        <span>Location: ${location}</span>
+        <span>Date: ${escapeHtml(date)}</span>
+        <span>Type: ${escapeHtml(event.event_type || "")}</span>
+        <span>Languages: ${languages}</span>
+        <span>Price: ${price}</span>
+      </div>
+      ${links ? `<p>${links}</p>` : ""}
+    `,
+    onOpen() {
+      mountModalGallery(images, titleText);
+    }
+  };
 }
 
 function openDayModal(date, events) {
@@ -276,7 +344,7 @@ function openDayModal(date, events) {
       (event) => `
       <div class="modal-event" data-event-id="${event.id}">
         <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
-        ${safeUrl(event.event_image_url) ? `<img class="modal-poster" src="${safeUrl(event.event_image_url)}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
+        ${getEventImages(event)[0] ? `<img class="modal-poster" src="${getEventImages(event)[0]}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
         <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
         <p>${escapeHtml(pickText(event, "location") || event.area || "")}</p>
       </div>
@@ -458,7 +526,7 @@ function renderEvents() {
       link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
     });
     const image = document.createElement("img");
-    const eventImageUrl = safeUrl(event.event_image_url);
+    const eventImageUrl = getEventImages(event)[0] || "";
     if (eventImageUrl) {
       image.className = "event-poster";
       image.src = eventImageUrl;
@@ -550,7 +618,7 @@ function renderFeatured() {
     box.type = "button";
     box.classList.add("featured-item-poster");
     const eventTitle = pickText(event, "title") || "Untitled";
-    const eventImageUrl = safeUrl(event.event_image_url);
+    const eventImageUrl = getEventImages(event)[0] || "";
     box.ariaLabel = `${eventTitle}. Open event details.`;
     box.title = eventTitle;
     if (eventImageUrl) {

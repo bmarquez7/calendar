@@ -25,6 +25,7 @@ create table if not exists public.events (
   currency text default 'ALL',
   ticket_url text,
   event_image_url text,
+  event_image_urls text[],
   is_highlighted boolean not null default false,
   admin_response_note text,
   organizer_name text,

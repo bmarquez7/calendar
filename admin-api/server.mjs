@@ -104,7 +104,19 @@ function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function uniqueImageUrls(featuredValue, galleryValues) {
+  const urls = [];
+  [featuredValue, ...toArray(galleryValues)]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .forEach((value) => {
+      if (!urls.includes(value)) urls.push(value);
+    });
+  return urls.slice(0, 5);
+}
+
 function normalizeSubmissionRow(row) {
+  const eventImageUrls = uniqueImageUrls(row?.event_image_url, row?.event_image_urls);
   return {
     status: "pending",
     title_en: String(row?.title_en || "").trim(),
@@ -126,7 +138,8 @@ function normalizeSubmissionRow(row) {
     price_max: row?.price_max ?? null,
     currency: row?.currency ? String(row.currency).trim() : "ALL",
     ticket_url: row?.ticket_url ? String(row.ticket_url).trim() : null,
-    event_image_url: row?.event_image_url ? String(row.event_image_url).trim() : null,
+    event_image_url: eventImageUrls[0] || null,
+    event_image_urls: eventImageUrls.length ? eventImageUrls : null,
     organizer_name: row?.organizer_name ? String(row.organizer_name).trim() : null,
     organizer_email: row?.organizer_email ? String(row.organizer_email).trim() : null,
     submitter_name: row?.submitter_name ? String(row.submitter_name).trim() : null,
@@ -157,6 +170,9 @@ function validateSubmissionRow(row, index) {
   }
   if (row.price_type !== "Free" && (row.price_min === null || row.price_min === "" || row.price_max === null || row.price_max === "")) {
     return `Event ${index + 1} needs min and max prices unless it is Free.`;
+  }
+  if (toArray(row.event_image_urls).length > 5) {
+    return `Event ${index + 1} can include up to 5 photos.`;
   }
   return "";
 }

@@ -13,6 +13,7 @@ const CURRENCY_OPTIONS = [
 const PRICE_TYPE_OPTIONS = ["Free", "Paid"];
 const MAX_GENERATED_EVENTS = 250;
 const MAX_SPECIFIC_REPEAT_DATES = 10;
+const MAX_EVENT_IMAGES = 5;
 const WEEKDAY_OPTIONS = [
   { value: 1, label: "Mon" },
   { value: 2, label: "Tue" },
@@ -247,6 +248,84 @@ function createLanguageField() {
   return wrap;
 }
 
+function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(".image-files")?.files || [])) {
+  const field = card.querySelector(".featured-image-field");
+  const optionsWrap = card.querySelector(".featured-image-options");
+  const help = card.querySelector(".public-submit-image-help");
+  if (!field || !optionsWrap) return;
+
+  optionsWrap.innerHTML = "";
+  if (help) help.textContent = "";
+
+  if (files.length <= 1) {
+    field.hidden = true;
+    card.dataset.featuredImageIndex = "0";
+    if (help && files.length === 1) {
+      help.textContent = "1 photo selected. It will be used as the featured image.";
+    }
+    return;
+  }
+
+  field.hidden = false;
+  const storedIndex = Number(card.dataset.featuredImageIndex || 0);
+  const selectedIndex = Number.isFinite(storedIndex)
+    ? Math.min(Math.max(storedIndex, 0), files.length - 1)
+    : 0;
+  card.dataset.featuredImageIndex = String(selectedIndex);
+  if (help) help.textContent = "Choose which photo appears first on the calendar card.";
+
+  files.forEach((file, index) => {
+    const option = document.createElement("label");
+    option.className = "featured-image-option";
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = `featured-image-${card.dataset.rowId || "row"}`;
+    radio.value = String(index);
+    radio.checked = index === selectedIndex;
+    radio.addEventListener("change", () => {
+      card.dataset.featuredImageIndex = radio.value;
+    });
+
+    const text = document.createElement("span");
+    text.className = "featured-image-option-name";
+    text.textContent = file.name;
+
+    option.append(radio, text);
+    optionsWrap.append(option);
+  });
+}
+
+function createImageFields() {
+  const imageUrlInput = createInput("url", "image-url", "Image URL");
+
+  const imageFilesInput = createInput("file", "image-files");
+  imageFilesInput.accept = "image/*";
+  imageFilesInput.multiple = true;
+
+  const featuredField = document.createElement("div");
+  featuredField.className = "public-submit-field featured-image-field";
+  featuredField.hidden = true;
+
+  const featuredLabel = document.createElement("span");
+  featuredLabel.className = "public-submit-label";
+  featuredLabel.textContent = "Featured photo";
+
+  const featuredHelp = document.createElement("p");
+  featuredHelp.className = "small public-submit-image-help";
+
+  const featuredOptions = document.createElement("div");
+  featuredOptions.className = "featured-image-options";
+
+  featuredField.append(featuredLabel, featuredHelp, featuredOptions);
+
+  return {
+    imageUrlField: createField("Image URL", imageUrlInput),
+    imageFilesField: createField(`Upload photos (up to ${MAX_EVENT_IMAGES})`, imageFilesInput),
+    featuredField
+  };
+}
+
 function addSpecificDateRow(list, initialValue = "") {
   if (!list || list.querySelectorAll(".repeat-specific-date-row").length >= MAX_SPECIFIC_REPEAT_DATES) return;
   const row = document.createElement("div");
@@ -410,10 +489,16 @@ function syncPriceState(card) {
 
 function syncImageState(card) {
   const imageUrlInput = card.querySelector(".image-url");
-  const imageFileInput = card.querySelector(".image-file");
-  const hasFile = Boolean(imageFileInput?.files?.length);
+  const imageFileInput = card.querySelector(".image-files");
+  if (imageFileInput?.files?.length > MAX_EVENT_IMAGES) {
+    imageFileInput.value = "";
+    setStatus(`Each event can include up to ${MAX_EVENT_IMAGES} photos.`, "error");
+  }
+  const files = Array.from(imageFileInput?.files || []);
+  const hasFile = Boolean(files.length);
   if (!imageUrlInput) return;
   imageUrlInput.disabled = hasFile;
+  renderFeaturedImageChoices(card, files);
 }
 
 function syncLanguageState(card) {
@@ -610,6 +695,7 @@ function addRow() {
 
   const card = document.createElement("div");
   card.className = "public-submit-card";
+  card.dataset.rowId = `public-row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const header = document.createElement("div");
   header.className = "public-submit-card-header";
@@ -647,9 +733,7 @@ function addRow() {
   priceMaxInput.step = "0.01";
   const currencySelect = createSelect("currency", CURRENCY_OPTIONS, true);
   const ticketUrlInput = createInput("url", "ticket-url", "Ticket / RSVP URL");
-  const imageUrlInput = createInput("url", "image-url", "Image URL");
-  const imageFileInput = createInput("file", "image-file");
-  imageFileInput.accept = "image/*";
+  const imageFields = createImageFields();
 
   grid.append(
     createField("Title *", titleInput),
@@ -665,8 +749,9 @@ function addRow() {
     createField("Max price", priceMaxInput),
     createField("Currency *", currencySelect),
     createField("Ticket URL", ticketUrlInput),
-    createField("Image URL", imageUrlInput),
-    createField("Image file", imageFileInput),
+    imageFields.imageUrlField,
+    imageFields.imageFilesField,
+    imageFields.featuredField,
     recurringField
   );
 
@@ -674,7 +759,7 @@ function addRow() {
   rowsBody.appendChild(card);
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
-  imageFileInput.addEventListener("change", () => syncImageState(card));
+  card.querySelector(".image-files")?.addEventListener("change", () => syncImageState(card));
   card.querySelector(".language-select")?.addEventListener("change", () => syncLanguageState(card));
   card.querySelector(".repeat-enabled")?.addEventListener("change", () => syncRecurringState(card));
   card.querySelector(".repeat-frequency")?.addEventListener("change", () => syncRecurringState(card));
@@ -698,7 +783,7 @@ function rowEmpty(card) {
     ".image-url"
   ];
   const hasValue = fields.some((selector) => String(card.querySelector(selector)?.value || "").trim());
-  const hasFile = card.querySelector(".image-file")?.files?.[0];
+  const hasFile = card.querySelector(".image-files")?.files?.[0];
   return !hasValue && !hasFile;
 }
 
@@ -737,7 +822,7 @@ async function submitRows() {
     const currency = card.querySelector(".currency").value.trim();
     const ticketUrl = card.querySelector(".ticket-url").value.trim();
     const imageUrlInput = card.querySelector(".image-url").value.trim();
-    const file = card.querySelector(".image-file")?.files?.[0] || null;
+    const imageFiles = Array.from(card.querySelector(".image-files")?.files || []);
 
     const required = [title, description, address, eventType, area, dateStart, dateEnd, priceType, currency];
     if (required.some((value) => !value)) {
@@ -755,10 +840,23 @@ async function submitRows() {
       return;
     }
 
-    let imageUrl = imageUrlInput || null;
-    if (file) {
+    let eventImageUrls = imageUrlInput ? [imageUrlInput] : [];
+    let featuredImageUrl = imageUrlInput || null;
+    if (imageFiles.length) {
       try {
-        imageUrl = await uploadImage(file);
+        const uploadedUrls = [];
+        for (const imageFile of imageFiles.slice(0, MAX_EVENT_IMAGES)) {
+          uploadedUrls.push(await uploadImage(imageFile));
+        }
+        const selectedIndex = Math.min(
+          Math.max(Number(card.dataset.featuredImageIndex || 0), 0),
+          Math.max(uploadedUrls.length - 1, 0)
+        );
+        featuredImageUrl = uploadedUrls[selectedIndex] || uploadedUrls[0] || null;
+        eventImageUrls = [
+          ...(featuredImageUrl ? [featuredImageUrl] : []),
+          ...uploadedUrls.filter((url) => url && url !== featuredImageUrl)
+        ];
       } catch (error) {
         setStatus(`Image upload failed on ${rowNo}: ${error.message}`, "error");
         return;
@@ -780,7 +878,8 @@ async function submitRows() {
       price_max: priceType === "Free" ? null : priceMax,
       currency,
       ticket_url: ticketUrl || null,
-      event_image_url: imageUrl,
+      event_image_url: featuredImageUrl,
+      event_image_urls: eventImageUrls.length ? eventImageUrls : null,
       organizer_name: organizerName.value.trim(),
       organizer_email: organizerEmail.value.trim(),
       submitter_name: submitterName.value.trim(),
