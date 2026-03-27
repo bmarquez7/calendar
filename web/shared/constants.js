@@ -145,8 +145,64 @@ export function isFeaturedEligibleArea(area) {
   return TIRANA_AREAS.includes(normalized);
 }
 
-export const LANGS = [
+export const UI_LANGS = [
   { code: "en", label: "English" },
   { code: "es", label: "Español" },
   { code: "sq", label: "Shqip" }
 ];
+
+function normalizeLanguageSort(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+export function sortEventLanguageOptions(values) {
+  return [...values].sort((a, b) => {
+    const priorityDiff = Number(a.priority || 99) - Number(b.priority || 99);
+    if (priorityDiff !== 0) return priorityDiff;
+    return normalizeLanguageSort(a.sortLabel || a.label).localeCompare(
+      normalizeLanguageSort(b.sortLabel || b.label),
+      "en",
+      { sensitivity: "base", numeric: true }
+    );
+  });
+}
+
+export const DEFAULT_EVENT_LANGUAGE_OPTIONS = sortEventLanguageOptions([
+  { code: "en", label: "English (Anglisht)", sortLabel: "English", priority: 0 },
+  { code: "sq", label: "Shqip (Albanian)", sortLabel: "Albanian", priority: 1 },
+  {
+    code: "asl",
+    label: "Gjuha Shqipe e Shenjave (Albanian Sign Language / Gjuha Shqipe e Shenjave)",
+    sortLabel: "Albanian Sign Language"
+  },
+  { code: "aromanian", label: "Armãneashce (Aromanian / Arumunisht)", sortLabel: "Aromanian" },
+  { code: "arberesh", label: "Arbërisht (Arbëresh / Arbërisht)", sortLabel: "Arberesh" },
+  { code: "arvanitika", label: "Arvanitika (Arvanitika / Arvanitika)", sortLabel: "Arvanitika" },
+  { code: "bg", label: "Български (Bulgarian / Bullgarisht)", sortLabel: "Bulgarian" },
+  { code: "cham", label: "Çamërisht (Cham Albanian / Çamërisht)", sortLabel: "Cham Albanian" },
+  { code: "hr", label: "Hrvatski (Croatian / Kroatisht)", sortLabel: "Croatian" },
+  { code: "fr", label: "Français (French / Frëngjisht)", sortLabel: "French" },
+  { code: "de", label: "Deutsch (German / Gjermanisht)", sortLabel: "German" },
+  { code: "el", label: "Ελληνικά (Greek / Greqisht)", sortLabel: "Greek" },
+  { code: "it", label: "Italiano (Italian / Italisht)", sortLabel: "Italian" },
+  { code: "mk", label: "Македонски (Macedonian / Maqedonisht)", sortLabel: "Macedonian" },
+  { code: "me", label: "Crnogorski (Montenegrin / Malazezisht)", sortLabel: "Montenegrin" },
+  { code: "romani", label: "Romani (Romani / Romani)", sortLabel: "Romani" },
+  { code: "ru", label: "Русский (Russian / Rusisht)", sortLabel: "Russian" },
+  { code: "sr", label: "Српски (Serbian / Serbisht)", sortLabel: "Serbian" },
+  { code: "es", label: "Español (Spanish / Spanjisht)", sortLabel: "Spanish" },
+  { code: "tl", label: "Tagalog (Tagalog / Tagalog)", sortLabel: "Tagalog" },
+  { code: "tr", label: "Türkçe (Turkish / Turqisht)", sortLabel: "Turkish" }
+]);
+
+export function buildEventLanguageMap(values = DEFAULT_EVENT_LANGUAGE_OPTIONS) {
+  return new Map(values.map((option) => [option.code, option.label]));
+}
+
+export function formatEventLanguageValue(value, values = DEFAULT_EVENT_LANGUAGE_OPTIONS) {
+  return buildEventLanguageMap(values).get(value) || String(value || "").trim();
+}

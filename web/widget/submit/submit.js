@@ -1,6 +1,12 @@
 import { createClient } from "../../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../../shared/config.js";
-import { EVENT_TYPES, AREA_GROUPS, LANGS } from "../../shared/constants.js";
+import {
+  EVENT_TYPES,
+  AREA_GROUPS,
+  DEFAULT_EVENT_LANGUAGE_OPTIONS,
+  sortEventLanguageOptions,
+  formatEventLanguageValue
+} from "../../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -47,6 +53,7 @@ const submitterNote = document.getElementById("submitter-note");
 
 let activeDescriptionInput = null;
 let activePickerState = null;
+let eventLanguageOptions = [...DEFAULT_EVENT_LANGUAGE_OPTIONS];
 
 function setStatus(message, kind = "info") {
   statusBox.style.display = "block";
@@ -58,6 +65,80 @@ function setStatus(message, kind = "info") {
 
 function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function customLanguageSort(label) {
+  return String(label || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function languageOptionByCode(code) {
+  return eventLanguageOptions.find((option) => option.code === code);
+}
+
+function mergeLanguageOptions(customOptions = []) {
+  const merged = [...DEFAULT_EVENT_LANGUAGE_OPTIONS];
+  customOptions.forEach((option) => {
+    if (!option?.code || !option?.label) return;
+    if (merged.some((existing) => existing.code === option.code)) return;
+    merged.push({
+      code: option.code,
+      label: option.label,
+      sortLabel: option.sort_label || option.sortLabel || customLanguageSort(option.label)
+    });
+  });
+  eventLanguageOptions = sortEventLanguageOptions(merged);
+}
+
+function applyLanguageOptionsToSelect(select) {
+  if (!select) return;
+  const selectedValues = new Set(Array.from(select.selectedOptions).map((option) => option.value));
+  select.innerHTML = "";
+  createOptionElements(select, [
+    ...eventLanguageOptions.map((option) => ({ value: option.code, label: option.label })),
+    { value: "other", label: "Other (add your own)" }
+  ]);
+  Array.from(select.options).forEach((option) => {
+    option.selected = selectedValues.has(option.value);
+  });
+}
+
+function refreshAllLanguageSelects() {
+  document.querySelectorAll(".language-select").forEach((select) => applyLanguageOptionsToSelect(select));
+}
+
+async function loadLanguageOptions() {
+  try {
+    const response = await fetch(`${ADMIN_API_URL}/v1/language-options`);
+    if (!response.ok) return;
+    const result = await response.json().catch(() => ({}));
+    mergeLanguageOptions(Array.isArray(result?.languages) ? result.languages : []);
+    refreshAllLanguageSelects();
+    document.querySelectorAll(".public-submit-language-field").forEach((field) => syncLanguageLaunch(field));
+  } catch (error) {
+    console.warn("Language options load failed", error);
+  }
+}
+
+async function saveCustomLanguage(label) {
+  const response = await fetch(`${ADMIN_API_URL}/v1/language-options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result?.error || `HTTP ${response.status}`);
+  }
+  const language = result?.language;
+  if (language?.code && language?.label) {
+    mergeLanguageOptions([language]);
+    refreshAllLanguageSelects();
+  }
+  return language;
 }
 
 function toIsoOrNull(value) {
@@ -243,10 +324,7 @@ function resolveEditorScope(field, panelClass) {
 }
 
 function languageDisplayLabel(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return "";
-  const match = LANGS.find((lang) => lang.code === trimmed);
-  return match ? match.label : trimmed;
+  return formatEventLanguageValue(value, eventLanguageOptions);
 }
 
 function languageSummary(scope) {
@@ -277,19 +355,19 @@ function createLanguageField() {
   select.className = "language-select";
   select.multiple = true;
   select.size = 8;
-  createOptionElements(select, [
-    ...LANGS.map((lang) => ({ value: lang.code, label: lang.label })),
-    { value: "other", label: "Other" }
-  ]);
+  applyLanguageOptionsToSelect(select);
   const help = createHelpText("Hold Ctrl (Windows) or Command (Mac) to select multiple.");
 
   const otherRow = document.createElement("div");
   otherRow.className = "public-submit-language-other";
   otherRow.hidden = true;
-  const otherInput = createInput("text", "language-other-input", "Other language");
+  const otherInput = createInput("text", "language-other-input", "Add another language and press Enter");
   otherInput.disabled = true;
+  const otherHelp = createHelpText("Press Enter after each language to save it for future use.");
+  const otherStatus = document.createElement("div");
+  otherStatus.className = "small public-submit-inline-status";
 
-  otherRow.append(otherInput);
+  otherRow.append(otherInput, otherHelp, otherStatus);
   editor.append(select, help, otherRow);
   wrap.append(label, button, editor);
 
@@ -304,6 +382,35 @@ function createLanguageField() {
     syncLanguageLaunch(wrap);
   });
   otherInput.addEventListener("input", () => syncLanguageLaunch(wrap));
+  otherInput.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const value = otherInput.value.trim();
+    if (!value) return;
+    otherStatus.textContent = "Saving...";
+    otherStatus.classList.remove("error", "success");
+    otherInput.disabled = true;
+    try {
+      const saved = await saveCustomLanguage(value);
+      if (saved?.code) {
+        Array.from(select.options).forEach((option) => {
+          if (option.value === "other") option.selected = false;
+          if (option.value === saved.code) option.selected = true;
+        });
+      }
+      otherInput.value = "";
+      otherStatus.textContent = "Added.";
+      otherStatus.classList.add("success");
+      syncLanguageState(editor);
+      syncLanguageLaunch(wrap);
+    } catch (error) {
+      otherStatus.textContent = error.message || "Could not save language.";
+      otherStatus.classList.add("error");
+    } finally {
+      otherInput.disabled = false;
+      otherInput.focus();
+    }
+  });
   syncLanguageLaunch(wrap);
   return wrap;
 }
@@ -1124,3 +1231,4 @@ document.addEventListener("keydown", (event) => {
 });
 
 addRow();
+loadLanguageOptions();

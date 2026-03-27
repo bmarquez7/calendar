@@ -104,6 +104,32 @@ function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeLanguageKey(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function hashString(value) {
+  let hash = 0;
+  for (const char of String(value || "")) {
+    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function buildLanguageCode(label) {
+  const normalized = normalizeLanguageKey(label)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36) || "language";
+  return `custom-${normalized}-${hashString(label).slice(0, 6)}`;
+}
+
 function uniqueImageUrls(featuredValue, galleryValues) {
   const urls = [];
   [featuredValue, ...toArray(galleryValues)]
@@ -322,7 +348,7 @@ function maybeRunCleanup(force = false) {
 app.addHook("preHandler", async (request, reply) => {
   const path = request.raw.url || "";
   if (!path.startsWith("/v1/")) return;
-  if (path.startsWith("/v1/health") || path.startsWith("/v1/public-submissions")) return;
+  if (path.startsWith("/v1/health") || path.startsWith("/v1/public-submissions") || path.startsWith("/v1/language-options")) return;
   const auth = request.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) {
@@ -407,6 +433,45 @@ app.post("/v1/public-submissions", async (request, reply) => {
   ]);
 
   return { ok: true, inserted: rows.length };
+});
+
+app.get("/v1/language-options", async (_, reply) => {
+  const listed = await serviceClient
+    .from("language_options")
+    .select("code, label, sort_label")
+    .order("sort_label", { ascending: true });
+  if (listed.error) return reply.code(500).send({ error: listed.error.message });
+  return { languages: listed.data || [] };
+});
+
+app.post("/v1/language-options", async (request, reply) => {
+  const label = String(request.body?.label || "").trim();
+  if (!label) return reply.code(400).send({ error: "Language label is required" });
+  if (label.length > 120) return reply.code(400).send({ error: "Language label is too long" });
+
+  const labelKey = normalizeLanguageKey(label);
+  const existing = await serviceClient
+    .from("language_options")
+    .select("code, label, sort_label")
+    .eq("label_key", labelKey)
+    .maybeSingle();
+  if (existing.error) return reply.code(500).send({ error: existing.error.message });
+  if (existing.data) return { ok: true, created: false, language: existing.data };
+
+  const payload = {
+    code: buildLanguageCode(label),
+    label,
+    label_key: labelKey,
+    sort_label: labelKey
+  };
+  const inserted = await serviceClient
+    .from("language_options")
+    .insert(payload)
+    .select("code, label, sort_label")
+    .maybeSingle();
+  if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
+
+  return { ok: true, created: true, language: inserted.data };
 });
 
 app.post("/v1/events/:eventId/review", async (request, reply) => {

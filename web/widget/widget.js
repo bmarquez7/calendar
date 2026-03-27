@@ -1,12 +1,21 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, DEFAULT_UI_LANG } from "../shared/config.js";
-import { EVENT_TYPES, AREA_GROUPS, LANGS, isFeaturedEligibleArea } from "../shared/constants.js";
+import {
+  EVENT_TYPES,
+  AREA_GROUPS,
+  UI_LANGS,
+  DEFAULT_EVENT_LANGUAGE_OPTIONS,
+  sortEventLanguageOptions,
+  formatEventLanguageValue,
+  isFeaturedEligibleArea
+} from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
   events: [],
   settings: null,
+  eventLanguageOptions: [...DEFAULT_EVENT_LANGUAGE_OPTIONS],
   uiLang: DEFAULT_UI_LANG,
   viewMode: "month",
   calendarDate: new Date(),
@@ -301,7 +310,7 @@ function eventDetailHtml(event) {
   const description = linkifyText(pickText(event, "description") || "");
   const location = escapeHtml(rawLocation);
   const date = formatDateRange(event.date_start, event.date_end);
-  const languages = escapeHtml((event.event_language || []).join(", "));
+  const languages = escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "));
   const price = escapeHtml(formatPrice(event));
   const ticketUrl = safeUrl(event.ticket_url);
   const sourceUrl = safeUrl(event.source_url);
@@ -445,7 +454,7 @@ function renderFilters() {
     createInput("search", strings.filters.search, "text", "Search titles and descriptions"),
     createSelect("eventType", strings.filters.eventType, EVENT_TYPES.map((t) => ({ value: t, label: t }))),
     createSelect("area", strings.filters.area, AREA_GROUPS),
-    createSelect("eventLanguage", strings.filters.eventLanguage, LANGS.map((l) => ({ value: l.code, label: l.label }))),
+    createSelect("eventLanguage", strings.filters.eventLanguage, state.eventLanguageOptions.map((l) => ({ value: l.code, label: l.label }))),
     createInput("dateFrom", strings.filters.dateFrom, "date"),
     createInput("dateTo", strings.filters.dateTo, "date"),
     createSelect("sort", strings.filters.sort, Object.entries(strings.sortOptions).map(([value, label]) => ({ value, label })), false)
@@ -539,7 +548,7 @@ function renderEvents() {
       <span>📍 ${escapeHtml(pickText(event, "location") || event.area)}</span>
       <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end))}</span>
       <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
-      <span>💬 ${escapeHtml((event.event_language || []).join(", "))}</span>
+      <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
       <span>💰 ${escapeHtml(formatPrice(event))}</span>
     `;
 
@@ -804,7 +813,7 @@ function syncUiCopy() {
   document.getElementById("hero-subtitle").textContent = pickSetting("hero_subtitle", strings.subtitle);
   featuredTitle.textContent = pickSetting("featured_title", "Highlighted Events");
   resetFilters.textContent = strings.reset;
-  const currentLang = LANGS.find((lang) => lang.code === state.uiLang);
+  const currentLang = UI_LANGS.find((lang) => lang.code === state.uiLang);
   languageButton.textContent = `Language: ${currentLang ? currentLang.label : "English"}`;
 }
 
@@ -864,7 +873,7 @@ document.addEventListener("click", (event) => {
     languageMenu.classList.add("hidden");
   }
 });
-LANGS.forEach((lang) => {
+UI_LANGS.forEach((lang) => {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "secondary";
@@ -878,6 +887,20 @@ LANGS.forEach((lang) => {
   });
   languageMenu.appendChild(button);
 });
+
+async function loadLanguageOptions() {
+  try {
+    const response = await fetch("/v1/language-options");
+    if (!response.ok) return;
+    const result = await response.json().catch(() => ({}));
+    const custom = Array.isArray(result?.languages) ? result.languages : [];
+    state.eventLanguageOptions = sortEventLanguageOptions([...DEFAULT_EVENT_LANGUAGE_OPTIONS, ...custom]);
+    renderFilters();
+    render();
+  } catch (error) {
+    console.warn("Language options load failed", error);
+  }
+}
 modalClose.addEventListener("click", closeModal);
 eventModal.addEventListener("click", (event) => {
   if (event.target.dataset.closeModal === "true") {
@@ -895,3 +918,4 @@ renderFilters();
 render();
 loadEvents();
 loadSettings();
+loadLanguageOptions();

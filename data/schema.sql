@@ -68,6 +68,14 @@ create table if not exists public.admin_user_roles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.language_options (
+  code text primary key,
+  label text not null,
+  label_key text not null unique,
+  sort_label text not null,
+  created_at timestamptz not null default now()
+);
+
 create or replace function public.current_admin_role()
 returns text
 language sql
@@ -207,3 +215,11 @@ for delete to authenticated using (public.has_admin_role('owner'));
 grant select, insert, update, delete on public.admin_user_roles to authenticated;
 grant execute on function public.current_admin_role() to anon, authenticated;
 grant execute on function public.has_admin_role(text) to anon, authenticated;
+
+alter table public.language_options enable row level security;
+
+drop policy if exists "Public read language options" on public.language_options;
+create policy "Public read language options" on public.language_options
+for select using (true);
+
+grant select on public.language_options to anon, authenticated;
