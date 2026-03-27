@@ -89,6 +89,10 @@ function canRole(actorRole, minRole) {
   return (ROLE_RANK[actorRole] || 0) >= (ROLE_RANK[minRole] || 0);
 }
 
+function uniqueEmails(...values) {
+  return [...new Set(values.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean))];
+}
+
 function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -213,6 +217,48 @@ async function sendConfirmationEmails(insertedRows) {
   );
 }
 
+function reviewSubject(status) {
+  if (status === "approved") return "Your Grow Albania event was approved";
+  if (status === "denied") return "Your Grow Albania event was not approved";
+  if (status === "needs_info") return "More information is needed for your Grow Albania event";
+  return "Update on your Grow Albania event submission";
+}
+
+function reviewIntro(status) {
+  if (status === "approved") return "Your event has been approved and can now appear on the public calendar.";
+  if (status === "denied") return "Your event submission was reviewed and was not approved.";
+  if (status === "needs_info") return "Your submission needs more information before it can be approved.";
+  return "Your event submission status has been updated.";
+}
+
+async function sendReviewEmails(eventRow, status, note) {
+  const recipients = uniqueEmails(eventRow.submitter_email, eventRow.organizer_email);
+  if (!recipients.length) return;
+
+  await Promise.all(
+    recipients.map((email) =>
+      sendMailSafe({
+        from: SMTP_FROM,
+        to: email,
+        subject: reviewSubject(status),
+        text: [
+          reviewIntro(status),
+          "",
+          `Event: ${eventRow.title_en || "Untitled"}`,
+          eventRow.date_start ? `Date: ${new Date(eventRow.date_start).toLocaleString("en-GB", { timeZone: "Europe/Tirane" })}` : "",
+          note ? "" : "",
+          note ? "Additional information from the admin:" : "",
+          note || "",
+          "",
+          "You can reply directly to the site admin if you need to follow up."
+        ]
+          .filter(Boolean)
+          .join("\n")
+      })
+    )
+  );
+}
+
 async function cleanupExpiredEvents() {
   const cutoffIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -322,6 +368,35 @@ app.post("/v1/public-submissions", async (request, reply) => {
   ]);
 
   return { ok: true, inserted: rows.length };
+});
+
+app.post("/v1/events/:eventId/review", async (request, reply) => {
+  if (!canRole(request.role, "moderator")) return reply.code(403).send({ error: "Moderator+ required" });
+
+  const { eventId } = request.params;
+  const { status, note = null } = request.body || {};
+  if (!["approved", "denied", "needs_info", "pending"].includes(status)) {
+    return reply.code(400).send({ error: "Invalid review status" });
+  }
+
+  const current = await serviceClient.from("events").select("*").eq("id", eventId).maybeSingle();
+  if (current.error) return reply.code(500).send({ error: current.error.message });
+  if (!current.data) return reply.code(404).send({ error: "Event not found" });
+
+  const patch = {
+    status,
+    admin_response_note: note ? String(note).trim() : null
+  };
+  if (status !== "approved") patch.is_highlighted = false;
+
+  const updated = await serviceClient.from("events").update(patch).eq("id", eventId).select("*").maybeSingle();
+  if (updated.error) return reply.code(500).send({ error: updated.error.message });
+
+  if (status !== "pending") {
+    await sendReviewEmails(updated.data || current.data, status, patch.admin_response_note);
+  }
+
+  return { ok: true, event: updated.data || current.data };
 });
 
 app.get("/v1/users", async (request, reply) => {

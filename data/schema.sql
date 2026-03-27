@@ -26,6 +26,7 @@ create table if not exists public.events (
   ticket_url text,
   event_image_url text,
   is_highlighted boolean not null default false,
+  admin_response_note text,
   organizer_name text,
   organizer_email text,
   submitter_name text,

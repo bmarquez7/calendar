@@ -122,7 +122,13 @@
               <input name="ticket_url" placeholder="Ticket URL" />
               <input type="url" name="event_image_url" placeholder="Event image/poster URL" />
               <input type="file" name="event_image_file" accept="image/*" />
+              <textarea name="admin_response_note" placeholder="Message for approval / rejection / more-info emails"></textarea>
               <button type="submit">Save changes</button>
+              <div class="admin-bar">
+                <button type="button" class="secondary" id="approve-email">Approve + email</button>
+                <button type="button" class="secondary" id="deny-email">Reject + email</button>
+                <button type="button" class="secondary" id="needs-info-email">Requires info + email</button>
+              </div>
               <div class="notice" id="edit-status" style="display:none;"></div>
             </form>
           </div>

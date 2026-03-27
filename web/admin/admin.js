@@ -17,6 +17,9 @@ const adminTableBody = document.querySelector("#admin-table tbody");
 const editForm = document.getElementById("edit-form");
 const editStatus = document.getElementById("edit-status");
 const newEventButton = document.getElementById("new-event");
+const approveEmailButton = document.getElementById("approve-email");
+const denyEmailButton = document.getElementById("deny-email");
+const needsInfoEmailButton = document.getElementById("needs-info-email");
 
 const batchSection = document.getElementById("batch-section");
 const batchForm = document.getElementById("batch-form");
@@ -60,8 +63,9 @@ const ROLE_RANK = {
 
 const EVENT_STATUS_RANK = {
   pending: 0,
-  approved: 1,
-  denied: 2
+  needs_info: 1,
+  approved: 2,
+  denied: 3
 };
 
 function escapeHtml(value) {
@@ -263,6 +267,7 @@ function fillEditForm(event) {
   editForm.currency.value = event.currency || "";
   editForm.ticket_url.value = event.ticket_url || "";
   editForm.event_image_url.value = event.event_image_url || "";
+  editForm.admin_response_note.value = event.admin_response_note || "";
 }
 
 function clearFormForNew() {
@@ -274,6 +279,7 @@ function clearFormForNew() {
   editForm.is_highlighted.checked = false;
   editForm.price_type.value = "Paid";
   editForm.currency.value = "ALL";
+  editForm.admin_response_note.value = "";
   setStatus(editStatus, "Creating a new event.");
 }
 
@@ -306,7 +312,8 @@ function toPayload(formData) {
     price_max: formData.get("price_max") || null,
     currency: formData.get("currency") || "ALL",
     ticket_url: formData.get("ticket_url") || null,
-    event_image_url: formData.get("event_image_url") || null
+    event_image_url: formData.get("event_image_url") || null,
+    admin_response_note: formData.get("admin_response_note") || null
   };
 }
 
@@ -386,15 +393,7 @@ async function saveEvent(payload) {
 }
 
 async function updateStatus(id, status) {
-  if (!hasRole("moderator")) return;
-  const patch = { status };
-  if (status !== "approved") patch.is_highlighted = false;
-  const { error } = await client.from("events").update(patch).eq("id", id);
-  if (error) {
-    alert(error.message);
-    return;
-  }
-  await loadEvents();
+  await sendReviewDecision(id, status);
 }
 
 async function toggleHighlight(id, isHighlighted) {
@@ -405,6 +404,49 @@ async function toggleHighlight(id, isHighlighted) {
     return;
   }
   await loadEvents();
+}
+
+async function prepareEditPayload() {
+  const formData = new FormData(editForm);
+  const selectedFile = formData.get("event_image_file");
+  if (selectedFile && selectedFile.size > 0) {
+    try {
+      const uploadedUrl = await uploadEventImage(selectedFile, "admin");
+      formData.set("event_image_url", uploadedUrl);
+    } catch (uploadError) {
+      setStatus(editStatus, `Image upload failed: ${uploadError.message}`);
+      return null;
+    }
+  }
+  return toPayload(formData);
+}
+
+async function sendReviewDecision(id, status, options = {}) {
+  if (!hasRole("moderator")) return;
+  const { useFormNote = false } = options;
+  let note = null;
+
+  if (useFormNote) {
+    if (!selectedId || selectedId !== id) {
+      setStatus(editStatus, "Open the event in Edit first so we can include your email note.", "error");
+      return;
+    }
+    const payload = await prepareEditPayload();
+    if (!payload) return;
+    await saveEvent(payload);
+    note = payload.admin_response_note || null;
+  }
+
+  try {
+    await api(`/v1/events/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ status, note })
+    });
+    setStatus(editStatus, `Saved and emailed status update: ${status}.`, "success");
+    await loadEvents();
+  } catch (error) {
+    setStatus(editStatus, error.message, "error");
+  }
 }
 
 async function deleteEvent(id) {
@@ -450,7 +492,12 @@ function renderTable() {
       deny.className = "secondary";
       deny.addEventListener("click", () => updateStatus(event.id, "denied"));
 
-      actionsCell.append(approve, hold, deny);
+      const needsInfo = document.createElement("button");
+      needsInfo.textContent = "Needs info";
+      needsInfo.className = "secondary";
+      needsInfo.addEventListener("click", () => updateStatus(event.id, "needs_info"));
+
+      actionsCell.append(approve, hold, deny, needsInfo);
 
       if (event.status === "approved" || event.is_highlighted) {
         const highlight = document.createElement("button");
@@ -854,18 +901,8 @@ hubBackButtons.forEach((button) => {
 
 editForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const formData = new FormData(editForm);
-  const selectedFile = formData.get("event_image_file");
-  if (selectedFile && selectedFile.size > 0) {
-    try {
-      const uploadedUrl = await uploadEventImage(selectedFile, "admin");
-      formData.set("event_image_url", uploadedUrl);
-    } catch (uploadError) {
-      setStatus(editStatus, `Image upload failed: ${uploadError.message}`);
-      return;
-    }
-  }
-  const payload = toPayload(formData);
+  const payload = await prepareEditPayload();
+  if (!payload) return;
   await saveEvent(payload);
 });
 
@@ -1012,6 +1049,30 @@ settingsForm.addEventListener("submit", async (event) => {
 newEventButton.addEventListener("click", (event) => {
   event.preventDefault();
   clearFormForNew();
+});
+
+approveEmailButton.addEventListener("click", async () => {
+  if (!selectedId) {
+    setStatus(editStatus, "Open an existing event before sending an approval email.", "error");
+    return;
+  }
+  await sendReviewDecision(selectedId, "approved", { useFormNote: true });
+});
+
+denyEmailButton.addEventListener("click", async () => {
+  if (!selectedId) {
+    setStatus(editStatus, "Open an existing event before sending a rejection email.", "error");
+    return;
+  }
+  await sendReviewDecision(selectedId, "denied", { useFormNote: true });
+});
+
+needsInfoEmailButton.addEventListener("click", async () => {
+  if (!selectedId) {
+    setStatus(editStatus, "Open an existing event before requesting more information.", "error");
+    return;
+  }
+  await sendReviewDecision(selectedId, "needs_info", { useFormNote: true });
 });
 
 if (batchRowsBody.querySelectorAll("tr").length === 0) {
