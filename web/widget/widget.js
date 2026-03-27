@@ -461,7 +461,7 @@ function renderFeatured() {
   }
 
   list.forEach((event) => {
-    const box = document.createElement("div");
+    const box = document.createElement(event ? "button" : "div");
     box.className = "featured-item";
     if (!event) {
       box.classList.add("featured-item-empty");
@@ -470,16 +470,23 @@ function renderFeatured() {
         box.classList.add("featured-item-empty-image");
         box.innerHTML = `<img class="featured-placeholder-image" src="${placeholderImageUrl}" alt="More events coming soon" loading="lazy" />`;
       } else {
-        box.innerHTML = "<h4>No event</h4><p>Coming soon</p><p></p>";
+        box.innerHTML = '<div class="featured-fallback"><span class="featured-fallback-title">Coming soon</span></div>';
       }
       featuredGrid.appendChild(box);
       return;
     }
-    box.innerHTML = `
-      <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
-      <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
-      <p>${escapeHtml(pickText(event, "location") || event.area || "")}</p>
-    `;
+    box.type = "button";
+    box.classList.add("featured-item-poster");
+    const eventTitle = pickText(event, "title") || "Untitled";
+    const eventImageUrl = safeUrl(event.event_image_url);
+    box.ariaLabel = `${eventTitle}. Open event details.`;
+    box.title = eventTitle;
+    if (eventImageUrl) {
+      box.innerHTML = `<img class="featured-poster-image" src="${eventImageUrl}" alt="${escapeHtml(eventTitle)}" loading="lazy" />`;
+    } else {
+      box.classList.add("featured-item-no-image");
+      box.innerHTML = `<div class="featured-fallback"><span class="featured-fallback-title">${escapeHtml(eventTitle)}</span></div>`;
+    }
     box.addEventListener("click", () => openModal(eventDetailHtml(event)));
     featuredGrid.appendChild(box);
   });

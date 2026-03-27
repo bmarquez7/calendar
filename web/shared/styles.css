@@ -173,11 +173,12 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  padding: 10px;
+  padding: 0;
   min-height: 110px;
   cursor: pointer;
-  display: grid;
-  gap: 6px;
+  display: block;
+  overflow: hidden;
+  width: 100%;
 }
 
 .featured-item-empty {
@@ -196,20 +197,53 @@ body {
   height: 100%;
   min-height: 110px;
   object-fit: cover;
-  border-radius: 8px;
+  display: block;
+}
+
+.featured-item-poster {
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid var(--border);
+  outline: none;
 }
 
-.featured-item h4 {
-  margin: 0;
-  font-size: 14px;
+.featured-item-poster:focus-visible {
+  box-shadow: 0 0 0 3px rgba(225, 122, 68, 0.28);
+  transform: translateY(-1px);
 }
 
-.featured-item p {
-  margin: 0;
+.featured-poster-image,
+.featured-fallback {
+  width: 100%;
+  min-height: 110px;
+  height: 100%;
+}
+
+.featured-poster-image {
+  display: block;
+  object-fit: cover;
+}
+
+.featured-item-no-image {
+  background:
+    radial-gradient(circle at top, rgba(225, 122, 68, 0.26), transparent 58%),
+    linear-gradient(160deg, rgba(24, 33, 42, 0.92), rgba(11, 18, 27, 0.96));
+}
+
+.featured-fallback {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 10px;
+}
+
+.featured-fallback-title {
+  color: #fff;
   font-size: 12px;
-  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.2;
   text-align: left;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 
 .control {
@@ -835,21 +869,20 @@ section {
 
   .featured-item {
     min-height: 84px;
+  }
+
+  .featured-poster-image,
+  .featured-fallback,
+  .featured-placeholder-image {
+    min-height: 84px;
+  }
+
+  .featured-fallback {
     padding: 6px;
   }
 
-  .featured-item h4 {
-    font-size: 11px;
-    line-height: 1.2;
-  }
-
-  .featured-item p {
+  .featured-fallback-title {
     font-size: 10px;
-    line-height: 1.15;
-  }
-
-  .featured-placeholder-image {
-    min-height: 84px;
   }
 
   .admin-bar {
@@ -964,19 +997,20 @@ section {
 
   .featured-item {
     min-height: 72px;
+  }
+
+  .featured-poster-image,
+  .featured-fallback,
+  .featured-placeholder-image {
+    min-height: 72px;
+  }
+
+  .featured-fallback {
     padding: 5px;
   }
 
-  .featured-item h4 {
-    font-size: 10px;
-  }
-
-  .featured-item p {
+  .featured-fallback-title {
     font-size: 9px;
-  }
-
-  .featured-placeholder-image {
-    min-height: 72px;
   }
 
   .calendar-grid {
