@@ -195,6 +195,14 @@ function syncPriceState(card) {
   }
 }
 
+function syncImageState(card) {
+  const imageUrlInput = card.querySelector(".image-url");
+  const imageFileInput = card.querySelector(".image-file");
+  const hasFile = Boolean(imageFileInput?.files?.length);
+  if (!imageUrlInput) return;
+  imageUrlInput.disabled = hasFile;
+}
+
 function addRow() {
   if (rowsBody.querySelectorAll(".public-submit-card").length >= MAX_ROWS) return;
 
@@ -262,7 +270,9 @@ function addRow() {
   rowsBody.appendChild(card);
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
+  imageFileInput.addEventListener("change", () => syncImageState(card));
   syncPriceState(card);
+  syncImageState(card);
   reindex();
 }
 
@@ -282,11 +292,8 @@ function rowEmpty(card) {
 }
 
 function validateSubmitterInfo() {
-  if (!submitterName.value.trim()) return "Submitter name is required.";
-  if (!submitterEmail.value.trim()) return "Submitter email is required.";
   if (!organizerName.value.trim()) return "Organizer name is required.";
   if (!organizerEmail.value.trim()) return "Organizer email is required.";
-  if (!submitterNote.value.trim()) return "Submitter note is required.";
   return "";
 }
 
