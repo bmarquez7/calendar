@@ -106,6 +106,15 @@ function applyLanguageOptionsToSelect(select) {
   });
 }
 
+function selectDefaultLanguages(select) {
+  if (!select) return;
+  const hasSelection = Array.from(select.options).some((option) => option.selected);
+  if (hasSelection) return;
+  Array.from(select.options).forEach((option) => {
+    option.selected = option.value === "en" || option.value === "sq";
+  });
+}
+
 function refreshAllLanguageSelects() {
   document.querySelectorAll(".language-select").forEach((select) => applyLanguageOptionsToSelect(select));
 }
@@ -356,6 +365,7 @@ function createLanguageField() {
   select.multiple = true;
   select.size = 8;
   applyLanguageOptionsToSelect(select);
+  selectDefaultLanguages(select);
   const help = createHelpText("Hold Ctrl (Windows) or Command (Mac) to select multiple.");
 
   const otherRow = document.createElement("div");
@@ -426,12 +436,9 @@ function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(
   optionsWrap.innerHTML = "";
   if (help) help.textContent = "";
 
-  if (files.length <= 1) {
+  if (!files.length) {
     field.hidden = true;
     card.dataset.featuredImageIndex = "0";
-    if (help && files.length === 1) {
-      help.textContent = "1 photo selected. It will be used as the featured image.";
-    }
     return;
   }
 
@@ -441,7 +448,11 @@ function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(
     ? Math.min(Math.max(storedIndex, 0), files.length - 1)
     : 0;
   card.dataset.featuredImageIndex = String(selectedIndex);
-  if (help) help.textContent = "Choose which photo appears first on the calendar card.";
+  if (help) {
+    help.textContent = files.length === 1
+      ? "1 photo selected. This preview will be used as the featured image."
+      : "Choose which photo appears first on the calendar card.";
+  }
 
   files.forEach((file, index) => {
     const previewUrl = URL.createObjectURL(file);
