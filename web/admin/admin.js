@@ -50,6 +50,7 @@ let currentEvents = [];
 let selectedId = null;
 let currentRole = null;
 let accessToken = null;
+let lastKnownSession = null;
 let activeTaskPage = null;
 let settingsLoaded = false;
 let currentSettings = { id: 1 };
@@ -254,12 +255,43 @@ function setAuthUi(session) {
 }
 
 async function ensureSession() {
-  const { data } = await client.auth.getSession();
-  setAuthUi(data.session);
-  if (data.session) {
-    accessToken = data.session.access_token;
+  let session = null;
+  let sessionError = null;
+
+  try {
+    const { data, error } = await client.auth.getSession();
+    session = data?.session || null;
+    if (error) sessionError = error;
+  } catch (error) {
+    sessionError = error;
   }
-  return data.session;
+
+  if (!session) {
+    try {
+      const { data, error } = await client.auth.refreshSession();
+      session = data?.session || null;
+      if (error) sessionError = sessionError || error;
+    } catch (error) {
+      sessionError = sessionError || error;
+    }
+  }
+
+  if (session) {
+    lastKnownSession = session;
+    accessToken = session.access_token;
+    setAuthUi(session);
+    return session;
+  }
+
+  if (sessionError && lastKnownSession?.access_token) {
+    accessToken = lastKnownSession.access_token;
+    setAuthUi(lastKnownSession);
+    setStatus(loginStatus, "Session check had a brief hiccup. We kept your admin view in place.", "error");
+    return lastKnownSession;
+  }
+
+  setAuthUi(null);
+  return null;
 }
 
 async function loadRole() {
@@ -1178,11 +1210,31 @@ syncEditHighlightAvailability();
 client.auth.onAuthStateChange(async (_evt, session) => {
   setAuthUi(session);
   if (session) {
+    lastKnownSession = session;
     accessToken = session.access_token;
     await loadRole();
     await loadEvents();
     await loadSettings();
     await loadUsers();
+  } else {
+    lastKnownSession = null;
+  }
+});
+
+window.addEventListener("pageshow", async (event) => {
+  if (!event.persisted) return;
+  const session = await ensureSession();
+  if (session && (activeTaskPage === "event-queue-page" || !activeTaskPage)) {
+    await loadEvents();
+  }
+});
+
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) return;
+  if (activeTaskPage !== "event-queue-page") return;
+  const session = await ensureSession();
+  if (session) {
+    await loadEvents();
   }
 });
 
