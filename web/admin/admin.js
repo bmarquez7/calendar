@@ -45,13 +45,34 @@ const taskHub = document.getElementById("task-hub");
 const taskPages = Array.from(document.querySelectorAll(".task-page"));
 const taskButtons = Array.from(document.querySelectorAll("[data-open-page]"));
 const hubBackButtons = Array.from(document.querySelectorAll("[data-back-to-hub]"));
+const ACTIVE_TASK_STORAGE_KEY = "grow-albania-admin-active-page";
+
+function readStoredTaskPage() {
+  try {
+    return sessionStorage.getItem(ACTIVE_TASK_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredTaskPage(pageId) {
+  try {
+    if (pageId) {
+      sessionStorage.setItem(ACTIVE_TASK_STORAGE_KEY, pageId);
+    } else {
+      sessionStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage access hiccups and keep the UI usable.
+  }
+}
 
 let currentEvents = [];
 let selectedId = null;
 let currentRole = null;
 let accessToken = null;
 let lastKnownSession = null;
-let activeTaskPage = null;
+let activeTaskPage = readStoredTaskPage();
 let settingsLoaded = false;
 let currentSettings = { id: 1 };
 let activeTextKey = "hero_title";
@@ -146,6 +167,7 @@ function pageAllowed(pageId) {
 
 function showTaskHub() {
   activeTaskPage = null;
+  writeStoredTaskPage(null);
   taskHub.classList.remove("hidden");
   taskPages.forEach((page) => page.classList.add("hidden"));
 }
@@ -153,6 +175,7 @@ function showTaskHub() {
 function showTaskPage(pageId) {
   if (!pageAllowed(pageId)) return;
   activeTaskPage = pageId;
+  writeStoredTaskPage(pageId);
   taskHub.classList.add("hidden");
   taskPages.forEach((page) => {
     page.classList.toggle("hidden", page.id !== pageId);
@@ -322,6 +345,7 @@ async function signIn(email, password) {
 }
 
 async function signOut() {
+  writeStoredTaskPage(null);
   await client.auth.signOut();
   setStatus(loginStatus, "Signed out.");
 }

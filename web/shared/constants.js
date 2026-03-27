@@ -94,6 +94,7 @@ export const OTHER_CITIES = sortUnique([
   "Berat",
   "Bulqizë",
   "Cërrik",
+  "Dhermi",
   "Delvinë",
   "Dibër",
   "Divjakë",

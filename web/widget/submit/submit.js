@@ -168,6 +168,50 @@ function createDescriptionField() {
   return wrap;
 }
 
+function createLanguageField() {
+  const wrap = document.createElement("div");
+  wrap.className = "public-submit-field public-submit-language-field";
+
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Languages *";
+
+  const options = document.createElement("div");
+  options.className = "public-submit-language-options";
+
+  LANGS.forEach((lang) => {
+    const chip = document.createElement("label");
+    chip.className = "public-submit-language-chip";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "language-option";
+    input.value = lang.code;
+    const text = document.createElement("span");
+    text.textContent = lang.label;
+    chip.append(input, text);
+    options.appendChild(chip);
+  });
+
+  const otherRow = document.createElement("div");
+  otherRow.className = "public-submit-language-other";
+
+  const otherChip = document.createElement("label");
+  otherChip.className = "public-submit-language-chip";
+  const otherToggle = document.createElement("input");
+  otherToggle.type = "checkbox";
+  otherToggle.className = "language-other-toggle";
+  const otherText = document.createElement("span");
+  otherText.textContent = "Other:";
+  otherChip.append(otherToggle, otherText);
+
+  const otherInput = createInput("text", "language-other-input", "Add language");
+  otherInput.disabled = true;
+
+  otherRow.append(otherChip, otherInput);
+  wrap.append(label, options, otherRow);
+  return wrap;
+}
+
 function createSelect(className, options, required = false) {
   const select = document.createElement("select");
   select.className = className;
@@ -210,6 +254,25 @@ function syncImageState(card) {
   imageUrlInput.disabled = hasFile;
 }
 
+function syncLanguageState(card) {
+  const otherToggle = card.querySelector(".language-other-toggle");
+  const otherInput = card.querySelector(".language-other-input");
+  if (!otherToggle || !otherInput) return;
+  otherInput.disabled = !otherToggle.checked;
+  if (!otherToggle.checked) otherInput.value = "";
+}
+
+function collectLanguages(card) {
+  const selected = Array.from(card.querySelectorAll(".language-option:checked")).map((input) => input.value.trim()).filter(Boolean);
+  const otherToggle = card.querySelector(".language-other-toggle");
+  const otherInput = card.querySelector(".language-other-input");
+  if (otherToggle?.checked) {
+    const otherValue = String(otherInput?.value || "").trim();
+    if (otherValue) selected.push(otherValue);
+  }
+  return selected;
+}
+
 function addRow() {
   if (rowsBody.querySelectorAll(".public-submit-card").length >= MAX_ROWS) return;
 
@@ -243,7 +306,7 @@ function addRow() {
   const areaSelect = createSelect("area", AREA_GROUPS, true);
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
-  const languageSelect = createSelect("language", LANGS.map((lang) => ({ value: lang.code, label: lang.label })), true);
+  const languageField = createLanguageField();
   const priceTypeSelect = createSelect("price-type", PRICE_TYPE_OPTIONS, true);
   const priceMinInput = createInput("number", "price-min", "Minimum price");
   priceMinInput.step = "0.01";
@@ -263,7 +326,7 @@ function addRow() {
     createField("Area *", areaSelect),
     createField("Start *", startInput),
     createField("End *", endInput),
-    createField("Language *", languageSelect),
+    languageField,
     createField("Paid / Free *", priceTypeSelect),
     createField("Min price", priceMinInput),
     createField("Max price", priceMaxInput),
@@ -278,8 +341,10 @@ function addRow() {
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
   imageFileInput.addEventListener("change", () => syncImageState(card));
+  card.querySelector(".language-other-toggle")?.addEventListener("change", () => syncLanguageState(card));
   syncPriceState(card);
   syncImageState(card);
+  syncLanguageState(card);
   reindex();
 }
 
@@ -290,6 +355,7 @@ function rowEmpty(card) {
     ".address",
     ".date-start",
     ".date-end",
+    ".language-other-input",
     ".ticket-url",
     ".image-url"
   ];
@@ -326,7 +392,7 @@ async function submitRows() {
     const area = card.querySelector(".area").value.trim();
     const dateStart = toIsoOrNull(card.querySelector(".date-start").value.trim());
     const dateEnd = toIsoOrNull(card.querySelector(".date-end").value.trim());
-    const language = card.querySelector(".language").value.trim();
+    const languages = collectLanguages(card);
     const priceType = card.querySelector(".price-type").value.trim();
     const priceMin = card.querySelector(".price-min").value.trim();
     const priceMax = card.querySelector(".price-max").value.trim();
@@ -335,9 +401,14 @@ async function submitRows() {
     const imageUrlInput = card.querySelector(".image-url").value.trim();
     const file = card.querySelector(".image-file")?.files?.[0] || null;
 
-    const required = [title, description, address, eventType, area, dateStart, dateEnd, language, priceType, currency];
+    const required = [title, description, address, eventType, area, dateStart, dateEnd, priceType, currency];
     if (required.some((value) => !value)) {
       setStatus(`${rowNo} is missing required fields.`, "error");
+      return;
+    }
+
+    if (!languages.length) {
+      setStatus(`${rowNo} needs at least one language selected.`, "error");
       return;
     }
 
@@ -363,7 +434,7 @@ async function submitRows() {
       location_en: address,
       event_type: eventType,
       area,
-      event_language: [language],
+      event_language: languages,
       date_start: dateStart,
       date_end: dateEnd,
       price_type: priceType,

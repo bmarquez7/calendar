@@ -771,6 +771,36 @@ section {
   align-content: start;
 }
 
+.public-submit-language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.public-submit-language-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.public-submit-language-chip input {
+  width: auto;
+  min-height: 0;
+}
+
+.public-submit-language-other {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
 .public-submit-label {
   font-size: 13px;
   color: var(--muted);
@@ -895,6 +925,10 @@ section {
   .public-submit-grid,
   .task-grid,
   .hex-palette {
+    grid-template-columns: 1fr;
+  }
+
+  .public-submit-language-other {
     grid-template-columns: 1fr;
   }
 
