@@ -145,6 +145,13 @@ function createField(labelText, input) {
   return wrap;
 }
 
+function createHelpText(text, className = "public-submit-help-text") {
+  const help = document.createElement("p");
+  help.className = `small ${className}`;
+  help.textContent = text;
+  return help;
+}
+
 function createInput(type, className, placeholder = "", required = false) {
   const input = document.createElement("input");
   input.type = type;
@@ -231,11 +238,12 @@ function createLanguageField() {
   const select = document.createElement("select");
   select.className = "language-select";
   select.multiple = true;
-  select.size = 4;
+  select.size = 1;
   createOptionElements(select, [
     ...LANGS.map((lang) => ({ value: lang.code, label: lang.label })),
     { value: "other", label: "Other" }
   ]);
+  const help = createHelpText("Hold Ctrl (Windows) or Command (Mac) to select multiple.");
 
   const otherRow = document.createElement("div");
   otherRow.className = "public-submit-language-other";
@@ -244,7 +252,7 @@ function createLanguageField() {
   otherInput.disabled = true;
 
   otherRow.append(otherInput);
-  wrap.append(label, select, otherRow);
+  wrap.append(label, select, help, otherRow);
   return wrap;
 }
 
@@ -254,6 +262,8 @@ function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(
   const help = card.querySelector(".public-submit-image-help");
   if (!field || !optionsWrap) return;
 
+  (card._featuredPreviewUrls || []).forEach((url) => URL.revokeObjectURL(url));
+  card._featuredPreviewUrls = [];
   optionsWrap.innerHTML = "";
   if (help) help.textContent = "";
 
@@ -275,6 +285,8 @@ function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(
   if (help) help.textContent = "Choose which photo appears first on the calendar card.";
 
   files.forEach((file, index) => {
+    const previewUrl = URL.createObjectURL(file);
+    card._featuredPreviewUrls.push(previewUrl);
     const option = document.createElement("label");
     option.className = "featured-image-option";
 
@@ -287,11 +299,22 @@ function renderFeaturedImageChoices(card, files = Array.from(card.querySelector(
       card.dataset.featuredImageIndex = radio.value;
     });
 
-    const text = document.createElement("span");
-    text.className = "featured-image-option-name";
-    text.textContent = file.name;
+    const tile = document.createElement("span");
+    tile.className = "featured-image-tile";
+    tile.title = file.name;
 
-    option.append(radio, text);
+    const image = document.createElement("img");
+    image.className = "featured-image-preview";
+    image.src = previewUrl;
+    image.alt = file.name;
+
+    const caption = document.createElement("span");
+    caption.className = "featured-image-caption";
+    caption.textContent = `Photo ${index + 1}`;
+
+    tile.append(image, caption);
+
+    option.append(radio, tile);
     optionsWrap.append(option);
   });
 }
@@ -350,26 +373,30 @@ function addSpecificDateRow(list, initialValue = "") {
   list.appendChild(row);
 }
 
-function createRecurringField() {
-  const wrap = document.createElement("div");
-  wrap.className = "public-submit-field public-submit-repeat-field";
+function createRecurringFields() {
+  const toggleField = document.createElement("label");
+  toggleField.className = "public-submit-field public-submit-repeat-toggle-field";
 
-  const label = document.createElement("span");
-  label.className = "public-submit-label";
-  label.textContent = "Repeating event";
+  const toggleLabel = document.createElement("span");
+  toggleLabel.className = "public-submit-label";
+  toggleLabel.textContent = "Repeating event?";
 
-  const toggleChip = document.createElement("label");
-  toggleChip.className = "public-submit-language-chip";
+  const toggleControl = document.createElement("span");
+  toggleControl.className = "repeat-toggle-control";
   const toggle = document.createElement("input");
   toggle.type = "checkbox";
   toggle.className = "repeat-enabled";
   const toggleText = document.createElement("span");
+  toggleText.className = "repeat-toggle-text";
   toggleText.textContent = "Repeat this event";
-  toggleChip.append(toggle, toggleText);
+  toggleControl.append(toggle, toggleText);
+  toggleField.append(toggleLabel, toggleControl);
 
+  const configField = document.createElement("div");
+  configField.className = "public-submit-field public-submit-repeat-field";
+  configField.hidden = true;
   const config = document.createElement("div");
   config.className = "public-submit-repeat-config";
-  config.hidden = true;
 
   const frequencySelect = createSelect("repeat-frequency", [
     { value: "weekly", label: "Weekly" },
@@ -449,8 +476,8 @@ function createRecurringField() {
     untilWrap
   );
 
-  wrap.append(label, toggleChip, config);
-  return wrap;
+  configField.append(config);
+  return { toggleField, configField };
 }
 
 function createSelect(className, options, required = false) {
@@ -498,6 +525,7 @@ function syncImageState(card) {
   const hasFile = Boolean(files.length);
   if (!imageUrlInput) return;
   imageUrlInput.disabled = hasFile;
+  imageUrlInput.placeholder = hasFile ? "Disabled when photos are uploaded" : "Image URL";
   renderFeaturedImageChoices(card, files);
 }
 
@@ -533,9 +561,10 @@ function defaultRepeatUntil(startDate, frequency) {
 
 function syncRecurringState(card) {
   const enabled = card.querySelector(".repeat-enabled")?.checked;
+  const configField = card.querySelector(".public-submit-repeat-field");
   const config = card.querySelector(".public-submit-repeat-config");
-  if (!config) return;
-  config.hidden = !enabled;
+  if (!configField || !config) return;
+  configField.hidden = !enabled;
   if (!enabled) return;
 
   const frequency = card.querySelector(".repeat-frequency")?.value || "weekly";
@@ -709,6 +738,8 @@ function addRow() {
   removeButton.className = "secondary";
   removeButton.textContent = "Remove";
   removeButton.addEventListener("click", () => {
+    (card._featuredPreviewUrls || []).forEach((url) => URL.revokeObjectURL(url));
+    card._featuredPreviewUrls = [];
     card.remove();
     reindex();
   });
@@ -725,7 +756,7 @@ function addRow() {
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
   const languageField = createLanguageField();
-  const recurringField = createRecurringField();
+  const recurringFields = createRecurringFields();
   const priceTypeSelect = createSelect("price-type", PRICE_TYPE_OPTIONS, true);
   const priceMinInput = createInput("number", "price-min", "Minimum price");
   priceMinInput.step = "0.01";
@@ -751,8 +782,9 @@ function addRow() {
     createField("Ticket URL", ticketUrlInput),
     imageFields.imageUrlField,
     imageFields.imageFilesField,
+    recurringFields.toggleField,
     imageFields.featuredField,
-    recurringField
+    recurringFields.configField
   );
 
   card.append(header, grid);
