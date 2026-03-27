@@ -153,6 +153,7 @@ async function uploadEventImage(file, folder) {
 async function api(path, options = {}) {
   const response = await fetch(`${ADMIN_API_URL}${path}`, {
     ...options,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
@@ -532,11 +533,14 @@ function renderTable() {
 async function loadEvents() {
   const session = await ensureSession();
   if (!session) return;
-  const { data, error } = await client.from("events").select("*").order("date_start", { ascending: true });
-  if (error) {
-    setStatus(loginStatus, `Load failed: ${error.message}`);
+  let result;
+  try {
+    result = await api(`/v1/events?ts=${Date.now()}`, { method: "GET" });
+  } catch (error) {
+    setStatus(loginStatus, `Load failed: ${error.message}`, "error");
     return;
   }
+  const data = result?.events || [];
   currentEvents = (data || []).sort((a, b) => {
     const statusDiff = (EVENT_STATUS_RANK[a.status] ?? 99) - (EVENT_STATUS_RANK[b.status] ?? 99);
     if (statusDiff !== 0) return statusDiff;
@@ -544,6 +548,7 @@ async function loadEvents() {
     if (createdDiff !== 0) return createdDiff;
     return new Date(a.date_start || 0) - new Date(b.date_start || 0);
   });
+  loginStatus.style.display = "none";
   renderTable();
 }
 

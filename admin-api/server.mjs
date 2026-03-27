@@ -61,7 +61,13 @@ await app.register(cors, {
 await app.register(fastifyStatic, {
   root: webRoot,
   prefix: "/",
-  index: false
+  index: false,
+  setHeaders(res) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+  }
 });
 
 async function getRole(user) {
@@ -315,6 +321,17 @@ app.addHook("preHandler", async (request, reply) => {
   request.role = role;
 });
 
+app.addHook("onSend", async (request, reply, payload) => {
+  const path = request.raw.url || "";
+  if (path.startsWith("/admin") || path.startsWith("/widget") || path.startsWith("/shared/") || path.startsWith("/v1/")) {
+    reply.header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+    reply.header("Surrogate-Control", "no-store");
+  }
+  return payload;
+});
+
 app.get("/v1/health", async () => {
   void maybeRunCleanup();
   return { ok: true };
@@ -397,6 +414,18 @@ app.post("/v1/events/:eventId/review", async (request, reply) => {
   }
 
   return { ok: true, event: updated.data || current.data };
+});
+
+app.get("/v1/events", async (request, reply) => {
+  if (!canRole(request.role, "moderator")) return reply.code(403).send({ error: "Moderator+ required" });
+
+  const listed = await serviceClient
+    .from("events")
+    .select("*")
+    .order("date_start", { ascending: true });
+  if (listed.error) return reply.code(500).send({ error: listed.error.message });
+
+  return { events: listed.data || [] };
 });
 
 app.get("/v1/users", async (request, reply) => {
