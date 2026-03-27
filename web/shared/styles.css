@@ -771,6 +771,14 @@ section {
   align-content: start;
 }
 
+.public-submit-language-field select[multiple] {
+  min-height: 136px;
+}
+
+.public-submit-repeat-field {
+  grid-column: 1 / -1;
+}
+
 .public-submit-language-options {
   display: flex;
   flex-wrap: wrap;
@@ -796,7 +804,7 @@ section {
 
 .public-submit-language-other {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   align-items: center;
 }

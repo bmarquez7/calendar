@@ -227,39 +227,23 @@ function createLanguageField() {
   label.className = "public-submit-label";
   label.textContent = "Languages *";
 
-  const options = document.createElement("div");
-  options.className = "public-submit-language-options";
-
-  LANGS.forEach((lang) => {
-    const chip = document.createElement("label");
-    chip.className = "public-submit-language-chip";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.className = "language-option";
-    input.value = lang.code;
-    const text = document.createElement("span");
-    text.textContent = lang.label;
-    chip.append(input, text);
-    options.appendChild(chip);
-  });
+  const select = document.createElement("select");
+  select.className = "language-select";
+  select.multiple = true;
+  select.size = 4;
+  createOptionElements(select, [
+    ...LANGS.map((lang) => ({ value: lang.code, label: lang.label })),
+    { value: "other", label: "Other" }
+  ]);
 
   const otherRow = document.createElement("div");
   otherRow.className = "public-submit-language-other";
-
-  const otherChip = document.createElement("label");
-  otherChip.className = "public-submit-language-chip";
-  const otherToggle = document.createElement("input");
-  otherToggle.type = "checkbox";
-  otherToggle.className = "language-other-toggle";
-  const otherText = document.createElement("span");
-  otherText.textContent = "Other:";
-  otherChip.append(otherToggle, otherText);
-
-  const otherInput = createInput("text", "language-other-input", "Add language");
+  otherRow.hidden = true;
+  const otherInput = createInput("text", "language-other-input", "Other language");
   otherInput.disabled = true;
 
-  otherRow.append(otherChip, otherInput);
-  wrap.append(label, options, otherRow);
+  otherRow.append(otherInput);
+  wrap.append(label, select, otherRow);
   return wrap;
 }
 
@@ -433,18 +417,23 @@ function syncImageState(card) {
 }
 
 function syncLanguageState(card) {
-  const otherToggle = card.querySelector(".language-other-toggle");
+  const select = card.querySelector(".language-select");
   const otherInput = card.querySelector(".language-other-input");
-  if (!otherToggle || !otherInput) return;
-  otherInput.disabled = !otherToggle.checked;
-  if (!otherToggle.checked) otherInput.value = "";
+  const otherRow = card.querySelector(".public-submit-language-other");
+  if (!select || !otherInput || !otherRow) return;
+  const hasOther = Array.from(select.selectedOptions).some((option) => option.value === "other");
+  otherRow.hidden = !hasOther;
+  otherInput.disabled = !hasOther;
+  if (!hasOther) otherInput.value = "";
 }
 
 function collectLanguages(card) {
-  const selected = Array.from(card.querySelectorAll(".language-option:checked")).map((input) => input.value.trim()).filter(Boolean);
-  const otherToggle = card.querySelector(".language-other-toggle");
+  const select = card.querySelector(".language-select");
+  const selected = Array.from(select?.selectedOptions || [])
+    .map((option) => option.value.trim())
+    .filter((value) => value && value !== "other");
   const otherInput = card.querySelector(".language-other-input");
-  if (otherToggle?.checked) {
+  if (Array.from(select?.selectedOptions || []).some((option) => option.value === "other")) {
     const otherValue = String(otherInput?.value || "").trim();
     if (otherValue) selected.push(otherValue);
   }
@@ -671,14 +660,14 @@ function addRow() {
     createField("Start *", startInput),
     createField("End *", endInput),
     languageField,
-    recurringField,
     createField("Paid / Free *", priceTypeSelect),
     createField("Min price", priceMinInput),
     createField("Max price", priceMaxInput),
     createField("Currency *", currencySelect),
     createField("Ticket URL", ticketUrlInput),
     createField("Image URL", imageUrlInput),
-    createField("Image file", imageFileInput)
+    createField("Image file", imageFileInput),
+    recurringField
   );
 
   card.append(header, grid);
@@ -686,7 +675,7 @@ function addRow() {
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
   imageFileInput.addEventListener("change", () => syncImageState(card));
-  card.querySelector(".language-other-toggle")?.addEventListener("change", () => syncLanguageState(card));
+  card.querySelector(".language-select")?.addEventListener("change", () => syncLanguageState(card));
   card.querySelector(".repeat-enabled")?.addEventListener("change", () => syncRecurringState(card));
   card.querySelector(".repeat-frequency")?.addEventListener("change", () => syncRecurringState(card));
   startInput.addEventListener("change", () => syncRecurringState(card));
