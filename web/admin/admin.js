@@ -40,6 +40,7 @@ const accessRequestsTableBody = document.querySelector("#access-requests-table t
 const inviteForm = document.getElementById("invite-form");
 const resetForm = document.getElementById("reset-form");
 const emailDiagnosticsButton = document.getElementById("email-diagnostics-button");
+const emailTestButton = document.getElementById("email-test-button");
 const emailDiagnosticsStatus = document.getElementById("email-diagnostics-status");
 
 const settingsSection = document.getElementById("settings-section");
@@ -292,18 +293,14 @@ async function publicApi(path, options = {}) {
 }
 
 function inviteResultMessage(result) {
-  if (result?.email_sent) {
-    return result.existing_user
-      ? `Access updated and email sent to ${result.email}.`
-      : `Invitation sent to ${result.email}.`;
-  }
+  const emailMessage = formatEmailResult(result?.email_result);
   if (result?.action_link) {
-    return `Access created for ${result.email}. Share this invite link manually: ${result.action_link}`;
+    return `${emailMessage} Share this invite link manually if needed: ${result.action_link}`;
   }
   if (result?.existing_user) {
-    return `Access granted to existing user ${result.email}. They can sign in at ${result.admin_url || `${ADMIN_API_URL}/admin/`}.`;
+    return `${emailMessage} Existing user can sign in at ${result.admin_url || `${ADMIN_API_URL}/admin/`}.`;
   }
-  return `Access updated for ${result?.email || "user"}.`;
+  return emailMessage || `Access updated for ${result?.email || "user"}.`;
 }
 
 function availableRequestRoles() {
@@ -326,6 +323,20 @@ function formatEmailDiagnostics(diagnostics) {
   return lines.join(" | ");
 }
 
+function formatEmailResult(emailResult, fallback = "No email attempt was made.") {
+  if (!emailResult) return fallback;
+  const recipients = (emailResult.recipients || []).join(", ") || "no recipients";
+  if (emailResult.counts && Array.isArray(emailResult.attempts)) {
+    const parts = [`Email summary — sent: ${emailResult.counts.sent}, skipped: ${emailResult.counts.skipped}, failed: ${emailResult.counts.failed}`];
+    emailResult.attempts.forEach((attempt) => {
+      const detail = `${attempt.status.toUpperCase()} to ${(attempt.recipients || []).join(", ") || "no recipients"}${attempt.error ? ` (${attempt.error})` : ""}`;
+      parts.push(detail);
+    });
+    return parts.join(" | ");
+  }
+  return `Email ${String(emailResult.status || "unknown").toUpperCase()} to ${recipients}${emailResult.error ? ` (${emailResult.error})` : ""}`;
+}
+
 function applyRoleUi() {
   rolePill.textContent = `role: ${currentRole || "none"}`;
 
@@ -344,6 +355,7 @@ function applyRoleUi() {
 
   inviteForm.querySelector("select[name='role']").disabled = !hasRole("owner");
   if (emailDiagnosticsButton) emailDiagnosticsButton.disabled = !hasRole("owner");
+  if (emailTestButton) emailTestButton.disabled = !hasRole("owner");
 }
 
 function setAuthUi(session) {
@@ -641,11 +653,11 @@ async function sendReviewDecision(id, status, options = {}) {
   }
 
   try {
-    await api(`/v1/events/${id}/review`, {
+    const result = await api(`/v1/events/${id}/review`, {
       method: "POST",
       body: JSON.stringify({ status, note })
     });
-    setStatus(editStatus, `Saved and emailed status update: ${status}.`, "success");
+    setStatus(editStatus, `Saved status update: ${status}. | ${formatEmailResult(result?.email)}`, "success");
     await loadEvents();
   } catch (error) {
     setStatus(editStatus, error.message, "error");
@@ -888,12 +900,12 @@ function renderAccessRequests() {
           body: JSON.stringify({ status: "approved", role: roleSelect.value })
         });
         const invite = result?.invite || {};
-        const inviteMessage = invite.action_link
-          ? ` Approved request for ${request.email}. Share this invite link manually: ${invite.action_link}`
-          : invite.email_sent
-            ? ` Approved request for ${request.email} and sent the access email.`
-            : ` Approved request for ${request.email}.`;
-        setStatus(usersStatus, inviteMessage.trim(), "success");
+        const pieces = [
+          `Approved request for ${request.email}.`,
+          formatEmailResult(invite.email, "No invite email result returned.")
+        ];
+        if (invite.action_link) pieces.push(`Manual invite link: ${invite.action_link}`);
+        setStatus(usersStatus, pieces.join(" | "), "success");
         await loadUsers();
       } catch (error) {
         setStatus(usersStatus, error.message, "error");
@@ -907,11 +919,11 @@ function renderAccessRequests() {
     deny.disabled = request.status === "denied";
     deny.addEventListener("click", async () => {
       try {
-        await api(`/v1/admin-access-requests/${request.id}`, {
+        const result = await api(`/v1/admin-access-requests/${request.id}`, {
           method: "PATCH",
           body: JSON.stringify({ status: "denied" })
         });
-        setStatus(usersStatus, `Denied access request for ${request.email}.`, "success");
+        setStatus(usersStatus, `Denied access request for ${request.email}. | ${formatEmailResult(result?.email)}`, "success");
         await loadUsers();
       } catch (error) {
         setStatus(usersStatus, error.message, "error");
@@ -1246,7 +1258,7 @@ accessRequestForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(accessRequestForm);
   try {
-    await publicApi("/v1/admin-access-requests", {
+    const result = await publicApi("/v1/admin-access-requests", {
       method: "POST",
       body: JSON.stringify({
         name: formData.get("name"),
@@ -1255,7 +1267,8 @@ accessRequestForm?.addEventListener("submit", async (event) => {
         note: formData.get("note")
       })
     });
-    setStatus(accessRequestStatus, "Request sent. We’ll email you after review.", "success");
+    const receipt = result?.email?.requester_receipt;
+    setStatus(accessRequestStatus, `Request sent. ${formatEmailResult(receipt, "We’ll email you after review.")}`, "success");
     accessRequestForm.reset();
   } catch (error) {
     setStatus(accessRequestStatus, error.message, "error");
@@ -1270,6 +1283,22 @@ emailDiagnosticsButton?.addEventListener("click", async () => {
   try {
     const result = await api("/v1/email-diagnostics", { method: "GET" });
     setStatus(emailDiagnosticsStatus, formatEmailDiagnostics(result?.diagnostics || {}), (result?.diagnostics?.transport_verified ? "success" : "error"));
+  } catch (error) {
+    setStatus(emailDiagnosticsStatus, error.message, "error");
+  }
+});
+
+emailTestButton?.addEventListener("click", async () => {
+  if (!hasRole("owner")) {
+    setStatus(emailDiagnosticsStatus, "Owner required.", "error");
+    return;
+  }
+  try {
+    const result = await api("/v1/email-test", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    setStatus(emailDiagnosticsStatus, formatEmailResult(result?.email, "No test email result returned."), result?.ok ? "success" : "error");
   } catch (error) {
     setStatus(emailDiagnosticsStatus, error.message, "error");
   }

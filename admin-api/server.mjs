@@ -203,14 +203,55 @@ function validateSubmissionRow(row, index) {
   return "";
 }
 
+function recipientList(...values) {
+  return [...new Set(values
+    .flatMap((value) => String(value || "").split(","))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean))];
+}
+
+function buildEmailResult(status, recipients, subject, error = "") {
+  return {
+    status,
+    recipients,
+    subject: String(subject || ""),
+    error: error ? String(error) : ""
+  };
+}
+
+function mergeEmailResults(results = []) {
+  const normalized = results.filter(Boolean);
+  const counts = {
+    sent: normalized.filter((result) => result.status === "sent").length,
+    skipped: normalized.filter((result) => result.status === "skipped").length,
+    failed: normalized.filter((result) => result.status === "failed").length
+  };
+  return {
+    counts,
+    attempts: normalized
+  };
+}
+
 async function sendMailSafe(message) {
-  if (!mailTransport || !SMTP_FROM) return false;
+  const recipients = recipientList(message?.to, message?.cc, message?.bcc);
+  const subject = String(message?.subject || "");
+
+  if (!mailTransport || !SMTP_FROM) {
+    const result = buildEmailResult("skipped", recipients, subject, "SMTP is not configured on the server.");
+    app.log.warn({ mail: result }, "Email skipped");
+    return result;
+  }
+
+  app.log.info({ mail: { recipients, subject } }, "Email send attempt");
   try {
     await mailTransport.sendMail(message);
-    return true;
+    const result = buildEmailResult("sent", recipients, subject);
+    app.log.info({ mail: result }, "Email sent");
+    return result;
   } catch (error) {
-    app.log.error({ err: error }, "Email send failed");
-    return false;
+    const result = buildEmailResult("failed", recipients, subject, error?.message || String(error));
+    app.log.error({ err: error, mail: result }, "Email send failed");
+    return result;
   }
 }
 
@@ -304,7 +345,7 @@ async function grantAdminAccess(email, role) {
     .upsert({ user_id: existingUser.id, email: normalizedEmail, role }, { onConflict: "user_id" });
   if (upsert.error) throw upsert.error;
 
-  const emailSent = await sendAdminAccessInviteEmail({
+  const emailResult = await sendAdminAccessInviteEmail({
     email: normalizedEmail,
     role,
     actionLink,
@@ -314,13 +355,15 @@ async function grantAdminAccess(email, role) {
   return {
     user: existingUser,
     actionLink,
-    emailSent,
+    emailResult,
     existingUser: Boolean(actionLink === null)
   };
 }
 
 async function notifyAdminOfSubmission(insertedRows) {
-  if (!emailRecipients.length) return;
+  if (!emailRecipients.length) {
+    return buildEmailResult("skipped", [], `Calendar submission pending approval (${insertedRows.length})`, "No notification emails are configured.");
+  }
   const lines = insertedRows.slice(0, 25).map((row) => {
     const dateLabel = row.date_start ? new Date(row.date_start).toLocaleString("en-GB", { timeZone: "Europe/Tirane" }) : "Unknown date";
     return `- ${row.title_en} | ${dateLabel} | ${row.area}`;
@@ -329,7 +372,7 @@ async function notifyAdminOfSubmission(insertedRows) {
     lines.push(`...and ${insertedRows.length - 25} more event(s).`);
   }
 
-  await sendMailSafe({
+  return sendMailSafe({
     from: SMTP_FROM,
     to: emailRecipients.join(", "),
     subject: `Calendar submission pending approval (${insertedRows.length})`,
@@ -356,7 +399,7 @@ async function sendConfirmationEmails(insertedRows) {
     });
   });
 
-  await Promise.all(
+  const attempts = await Promise.all(
     [...grouped.entries()].map(([email, titles]) =>
       sendMailSafe({
         from: SMTP_FROM,
@@ -374,11 +417,14 @@ async function sendConfirmationEmails(insertedRows) {
       })
     )
   );
+  return mergeEmailResults(attempts);
 }
 
 async function notifyAdminOfAccessRequest(requestRow) {
-  if (!emailRecipients.length) return;
-  await sendMailSafe({
+  if (!emailRecipients.length) {
+    return buildEmailResult("skipped", [], "New admin access request", "No notification emails are configured.");
+  }
+  return sendMailSafe({
     from: SMTP_FROM,
     to: emailRecipients.join(", "),
     subject: "New admin access request",
@@ -398,8 +444,10 @@ async function notifyAdminOfAccessRequest(requestRow) {
 }
 
 async function sendAccessRequestReceipt(requestRow) {
-  if (!requestRow?.email) return;
-  await sendMailSafe({
+  if (!requestRow?.email) {
+    return buildEmailResult("skipped", [], "We received your Grow Albania admin access request", "No recipient email was provided.");
+  }
+  return sendMailSafe({
     from: SMTP_FROM,
     to: requestRow.email,
     subject: "We received your Grow Albania admin access request",
@@ -418,7 +466,9 @@ async function sendAccessRequestReceipt(requestRow) {
 }
 
 async function sendAccessRequestDecisionEmail(requestRow, status, reviewNote, approvedRole = "") {
-  if (!requestRow?.email) return;
+  if (!requestRow?.email) {
+    return buildEmailResult("skipped", [], "Update on your Grow Albania admin access request", "No recipient email was provided.");
+  }
   const subject = status === "approved"
     ? "Your Grow Albania admin access request was approved"
     : "Update on your Grow Albania admin access request";
@@ -428,7 +478,7 @@ async function sendAccessRequestDecisionEmail(requestRow, status, reviewNote, ap
       ? "Your admin access request was reviewed and was not approved."
       : "Your admin access request has been reviewed.";
 
-  await sendMailSafe({
+  return sendMailSafe({
     from: SMTP_FROM,
     to: requestRow.email,
     subject,
@@ -489,9 +539,11 @@ function reviewIntro(status) {
 
 async function sendReviewEmails(eventRow, status, note) {
   const recipients = uniqueEmails(eventRow.submitter_email, eventRow.organizer_email);
-  if (!recipients.length) return;
+  if (!recipients.length) {
+    return buildEmailResult("skipped", [], reviewSubject(status), "No submitter or organizer email was provided.");
+  }
 
-  await Promise.all(
+  const attempts = await Promise.all(
     recipients.map((email) =>
       sendMailSafe({
         from: SMTP_FROM,
@@ -513,6 +565,7 @@ async function sendReviewEmails(eventRow, status, note) {
       })
     )
   );
+  return mergeEmailResults(attempts);
 }
 
 async function cleanupExpiredEvents() {
@@ -632,12 +685,19 @@ app.post("/v1/public-submissions", async (request, reply) => {
   if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
 
   const rows = inserted.data || [];
-  await Promise.all([
+  const [adminEmail, confirmationEmails] = await Promise.all([
     notifyAdminOfSubmission(rows),
     sendConfirmationEmails(rows)
   ]);
 
-  return { ok: true, inserted: rows.length };
+  return {
+    ok: true,
+    inserted: rows.length,
+    email: {
+      admin_notification: adminEmail,
+      confirmations: confirmationEmails
+    }
+  };
 });
 
 app.post("/v1/admin-access-requests", async (request, reply) => {
@@ -664,12 +724,18 @@ app.post("/v1/admin-access-requests", async (request, reply) => {
     .maybeSingle();
   if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
 
-  await Promise.all([
+  const [adminNotification, requesterReceipt] = await Promise.all([
     notifyAdminOfAccessRequest(inserted.data),
     sendAccessRequestReceipt(inserted.data)
   ]);
 
-  return { ok: true };
+  return {
+    ok: true,
+    email: {
+      admin_notification: adminNotification,
+      requester_receipt: requesterReceipt
+    }
+  };
 });
 
 app.get("/v1/language-options", async (_, reply) => {
@@ -735,6 +801,28 @@ app.get("/v1/email-diagnostics", async (request, reply) => {
   return { diagnostics: await runEmailDiagnostics() };
 });
 
+app.post("/v1/email-test", async (request, reply) => {
+  if (!canRole(request.role, "owner")) return reply.code(403).send({ error: "Owner required" });
+  const targetEmail = String(request.body?.email || request.user?.email || "").trim().toLowerCase();
+  if (!targetEmail) return reply.code(400).send({ error: "No target email available" });
+
+  const result = await sendMailSafe({
+    from: SMTP_FROM,
+    to: targetEmail,
+    subject: "Grow Albania calendar test email",
+    text: [
+      "This is a test email from the Grow Albania calendar admin service.",
+      "",
+      `Sent at: ${new Date().toISOString()}`,
+      adminRedirectUrl() ? `Admin portal: ${adminRedirectUrl()}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n")
+  });
+
+  return { ok: result.status === "sent", email: result };
+});
+
 app.patch("/v1/admin-access-requests/:requestId", async (request, reply) => {
   if (!canRole(request.role, "editor")) return reply.code(403).send({ error: "Editor+ required" });
 
@@ -781,17 +869,18 @@ app.patch("/v1/admin-access-requests/:requestId", async (request, reply) => {
     .maybeSingle();
   if (updated.error) return reply.code(500).send({ error: updated.error.message });
 
-  if (status !== "approved") {
-    await sendAccessRequestDecisionEmail(updated.data || current.data, status, updated.data?.review_note || null, "");
-  }
+  const requestEmail = status !== "approved"
+    ? await sendAccessRequestDecisionEmail(updated.data || current.data, status, updated.data?.review_note || null, "")
+    : null;
 
   return {
     ok: true,
     request: updated.data || current.data,
+    email: requestEmail,
     invite: inviteResult
       ? {
-          email_sent: inviteResult.emailSent,
-          action_link: inviteResult.emailSent ? null : inviteResult.actionLink,
+          email: inviteResult.emailResult,
+          action_link: inviteResult.emailResult?.status === "sent" ? null : inviteResult.actionLink,
           existing_user: inviteResult.existingUser
         }
       : null
@@ -820,11 +909,11 @@ app.post("/v1/events/:eventId/review", async (request, reply) => {
   const updated = await serviceClient.from("events").update(patch).eq("id", eventId).select("*").maybeSingle();
   if (updated.error) return reply.code(500).send({ error: updated.error.message });
 
-  if (status !== "pending") {
-    await sendReviewEmails(updated.data || current.data, status, patch.admin_response_note);
-  }
+  const email = status !== "pending"
+    ? await sendReviewEmails(updated.data || current.data, status, patch.admin_response_note)
+    : buildEmailResult("skipped", [], reviewSubject(status), "Pending status does not send review emails.");
 
-  return { ok: true, event: updated.data || current.data };
+  return { ok: true, event: updated.data || current.data, email };
 });
 
 app.get("/v1/events", async (request, reply) => {
@@ -875,8 +964,8 @@ app.post("/v1/users/invite", async (request, reply) => {
       email,
       user_id: granted.user.id,
       role,
-      email_sent: granted.emailSent,
-      action_link: granted.emailSent ? null : granted.actionLink,
+      email_result: granted.emailResult,
+      action_link: granted.emailResult?.status === "sent" ? null : granted.actionLink,
       existing_user: granted.existingUser,
       admin_url: adminRedirectUrl() || null
     };
