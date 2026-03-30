@@ -7,6 +7,8 @@ import {
   DEFAULT_EVENT_LANGUAGE_OPTIONS,
   sortEventLanguageOptions,
   formatEventLanguageValue,
+  formatAreaLabel,
+  normalizeAreaValue,
   isFeaturedEligibleArea
 } from "../shared/constants.js";
 
@@ -306,7 +308,7 @@ function mountModalGallery(images, titleText) {
 function eventDetailHtml(event) {
   const titleText = pickText(event, "title") || "Untitled";
   const title = escapeHtml(titleText);
-  const rawLocation = pickText(event, "location") || event.area || "";
+  const rawLocation = pickText(event, "location") || formatAreaLabel(event.area) || "";
   const description = linkifyText(pickText(event, "description") || "");
   const location = escapeHtml(rawLocation);
   const date = formatDateRange(event.date_start, event.date_end);
@@ -355,7 +357,7 @@ function openDayModal(date, events) {
         <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
         ${getEventImages(event)[0] ? `<img class="modal-poster" src="${getEventImages(event)[0]}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
         <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
-        <p>${escapeHtml(pickText(event, "location") || event.area || "")}</p>
+        <p>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</p>
       </div>
     `
     )
@@ -468,7 +470,7 @@ function filterEvents() {
       const searchText = `${pickText(event, "title")} ${pickText(event, "description")}`.toLowerCase();
       const matchesSearch = !search || searchText.includes(search.toLowerCase());
       const matchesType = !eventType || event.event_type === eventType;
-      const matchesArea = !area || event.area === area;
+      const matchesArea = !area || normalizeAreaValue(event.area) === area;
       const matchesLanguage = !eventLanguage || (event.event_language || []).includes(eventLanguage);
       const startDate = event.date_start ? new Date(event.date_start) : null;
       const matchesFrom = !dateFrom || (startDate && startDate >= new Date(dateFrom));
@@ -545,7 +547,7 @@ function renderEvents() {
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.innerHTML = `
-      <span>📍 ${escapeHtml(pickText(event, "location") || event.area)}</span>
+      <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
       <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end))}</span>
       <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
       <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
@@ -555,7 +557,7 @@ function renderEvents() {
     const actions = document.createElement("div");
     const ticketUrl = safeUrl(event.ticket_url);
     const sourceUrl = safeUrl(event.source_url);
-    const mapsUrl = safeUrl(googleMapsUrl(pickText(event, "location") || event.area, event.area));
+    const mapsUrl = safeUrl(googleMapsUrl(pickText(event, "location") || formatAreaLabel(event.area), event.area));
     if (ticketUrl) {
       const link = document.createElement("a");
       link.href = ticketUrl;
@@ -829,7 +831,9 @@ async function loadEvents() {
     return;
   }
   const now = new Date();
-  state.events = (data || []).filter((event) => isPublicEventActive(event, now));
+  state.events = (data || [])
+    .map((event) => ({ ...event, area: normalizeAreaValue(event.area) }))
+    .filter((event) => isPublicEventActive(event, now));
   render();
 }
 

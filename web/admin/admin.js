@@ -1,6 +1,6 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../shared/config.js";
-import { AREA_GROUPS, isFeaturedEligibleArea } from "../shared/constants.js";
+import { AREA_GROUPS, formatAreaLabel, normalizeAreaValue, isFeaturedEligibleArea } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -388,7 +388,7 @@ function fillEditForm(event) {
   editForm.location_es.value = event.location_es || "";
   editForm.location_sq.value = event.location_sq || "";
   editForm.event_type.value = event.event_type || "";
-  editForm.area.value = event.area || "";
+  editForm.area.value = normalizeAreaValue(event.area) || "";
   editForm.event_language.value = (event.event_language || []).join(",");
   editForm.date_start.value = toLocalInputValue(event.date_start);
   editForm.date_end.value = toLocalInputValue(event.date_end);
@@ -614,7 +614,7 @@ function renderTable() {
       <td><span class="status-pill">${escapeHtml(event.status || "")}</span></td>
       <td>${event.is_highlighted ? '<span class="status-pill">Yes</span>' : "—"}</td>
       <td>${escapeHtml(event.date_start ? new Date(event.date_start).toLocaleString() : "")}</td>
-      <td>${escapeHtml(event.area || "")}</td>
+      <td>${escapeHtml(formatAreaLabel(event.area || ""))}</td>
       <td>${escapeHtml(event.event_type || "")}</td>
       <td></td>
     `;
@@ -699,7 +699,9 @@ async function loadEvents() {
     return;
   }
   const data = result?.events || [];
-  currentEvents = (data || []).sort((a, b) => {
+  currentEvents = (data || [])
+    .map((event) => ({ ...event, area: normalizeAreaValue(event.area) }))
+    .sort((a, b) => {
     const statusDiff = (EVENT_STATUS_RANK[a.status] ?? 99) - (EVENT_STATUS_RANK[b.status] ?? 99);
     if (statusDiff !== 0) return statusDiff;
     const createdDiff = new Date(b.created_at || 0) - new Date(a.created_at || 0);
