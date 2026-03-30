@@ -39,6 +39,8 @@ const usersTableBody = document.querySelector("#users-table tbody");
 const accessRequestsTableBody = document.querySelector("#access-requests-table tbody");
 const inviteForm = document.getElementById("invite-form");
 const resetForm = document.getElementById("reset-form");
+const emailDiagnosticsButton = document.getElementById("email-diagnostics-button");
+const emailDiagnosticsStatus = document.getElementById("email-diagnostics-status");
 
 const settingsSection = document.getElementById("settings-section");
 const settingsForm = document.getElementById("settings-form");
@@ -308,6 +310,22 @@ function availableRequestRoles() {
   return hasRole("owner") ? ["moderator", "editor", "owner"] : ["moderator"];
 }
 
+function formatEmailDiagnostics(diagnostics) {
+  const lines = [
+    `SMTP configured: ${diagnostics.configured ? "yes" : "no"}`,
+    `Transport verified: ${diagnostics.transport_verified ? "yes" : "no"}`,
+    `Host: ${diagnostics.host || "missing"}`,
+    `Port: ${diagnostics.port || "missing"}`,
+    `Secure: ${diagnostics.secure ? "true" : "false"}`,
+    `From: ${diagnostics.from || "missing"}`,
+    `Auth user: ${diagnostics.auth_user || "missing"}`,
+    `Notify emails: ${(diagnostics.notify_emails || []).join(", ") || "missing"}`,
+    `Admin redirect URL: ${diagnostics.admin_redirect_url || "missing"}`
+  ];
+  if (diagnostics.error) lines.push(`Error: ${diagnostics.error}`);
+  return lines.join(" | ");
+}
+
 function applyRoleUi() {
   rolePill.textContent = `role: ${currentRole || "none"}`;
 
@@ -325,6 +343,7 @@ function applyRoleUi() {
   }
 
   inviteForm.querySelector("select[name='role']").disabled = !hasRole("owner");
+  if (emailDiagnosticsButton) emailDiagnosticsButton.disabled = !hasRole("owner");
 }
 
 function setAuthUi(session) {
@@ -1240,6 +1259,19 @@ accessRequestForm?.addEventListener("submit", async (event) => {
     accessRequestForm.reset();
   } catch (error) {
     setStatus(accessRequestStatus, error.message, "error");
+  }
+});
+
+emailDiagnosticsButton?.addEventListener("click", async () => {
+  if (!hasRole("owner")) {
+    setStatus(emailDiagnosticsStatus, "Owner required.", "error");
+    return;
+  }
+  try {
+    const result = await api("/v1/email-diagnostics", { method: "GET" });
+    setStatus(emailDiagnosticsStatus, formatEmailDiagnostics(result?.diagnostics || {}), (result?.diagnostics?.transport_verified ? "success" : "error"));
+  } catch (error) {
+    setStatus(emailDiagnosticsStatus, error.message, "error");
   }
 });
 

@@ -444,6 +444,35 @@ async function sendAccessRequestDecisionEmail(requestRow, status, reviewNote, ap
   });
 }
 
+async function runEmailDiagnostics() {
+  const diagnostics = {
+    configured: Boolean(mailTransport && SMTP_FROM),
+    host: SMTP_HOST || null,
+    port: SMTP_PORT || null,
+    secure: String(SMTP_SECURE).toLowerCase() === "true",
+    from: SMTP_FROM || null,
+    auth_user: SMTP_USER || null,
+    notify_emails: emailRecipients,
+    admin_redirect_url: adminRedirectUrl() || null,
+    transport_verified: false,
+    error: null
+  };
+
+  if (!mailTransport || !SMTP_FROM) {
+    diagnostics.error = "SMTP is not configured on the server.";
+    return diagnostics;
+  }
+
+  try {
+    await mailTransport.verify();
+    diagnostics.transport_verified = true;
+  } catch (error) {
+    diagnostics.error = error?.message || String(error);
+  }
+
+  return diagnostics;
+}
+
 function reviewSubject(status) {
   if (status === "approved") return "Your Grow Albania event was approved";
   if (status === "denied") return "Your Grow Albania event was not approved";
@@ -699,6 +728,11 @@ app.get("/v1/admin-access-requests", async (request, reply) => {
   });
 
   return { requests };
+});
+
+app.get("/v1/email-diagnostics", async (request, reply) => {
+  if (!canRole(request.role, "owner")) return reply.code(403).send({ error: "Owner required" });
+  return { diagnostics: await runEmailDiagnostics() };
 });
 
 app.patch("/v1/admin-access-requests/:requestId", async (request, reply) => {
