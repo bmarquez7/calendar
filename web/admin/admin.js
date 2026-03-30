@@ -430,10 +430,10 @@ async function loadRole() {
 async function signIn(email, password) {
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (error) {
-    setStatus(loginStatus, error.message);
+    setStatus(loginStatus, error.message, "error");
     return;
   }
-  setStatus(loginStatus, "Signed in.");
+  setStatus(loginStatus, "Signed in.", "success");
   const session = await ensureSession();
   if (!session) return;
   await loadRole();
@@ -445,7 +445,7 @@ async function signIn(email, password) {
 async function signOut() {
   writeStoredTaskPage(null);
   await client.auth.signOut();
-  setStatus(loginStatus, "Signed out.");
+  setStatus(loginStatus, "Signed out.", "success");
 }
 
 function fillEditForm(event) {
@@ -595,10 +595,10 @@ async function saveEvent(payload) {
 
   const { error } = await query;
   if (error) {
-    setStatus(editStatus, error.message);
+    setStatus(editStatus, error.message, "error");
     return;
   }
-  setStatus(editStatus, selectedId ? "Saved." : "Created recurring event set.");
+  setStatus(editStatus, selectedId ? "Saved." : "Created recurring event set.", "success");
   await loadEvents();
 }
 
@@ -615,9 +615,10 @@ async function toggleHighlight(id, isHighlighted) {
   }
   const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).eq("id", id);
   if (error) {
-    alert(error.message);
+    setStatus(editStatus, error.message, "error");
     return;
   }
+  setStatus(editStatus, isHighlighted ? "Event highlighted." : "Event removed from highlights.", "success");
   await loadEvents();
 }
 
@@ -629,7 +630,7 @@ async function prepareEditPayload() {
       const uploadedUrl = await uploadEventImage(selectedFile, "admin");
       formData.set("event_image_url", uploadedUrl);
     } catch (uploadError) {
-      setStatus(editStatus, `Image upload failed: ${uploadError.message}`);
+      setStatus(editStatus, `Image upload failed: ${uploadError.message}`, "error");
       return null;
     }
   }
@@ -668,9 +669,10 @@ async function deleteEvent(id) {
   if (!hasRole("editor")) return;
   const { error } = await client.from("events").delete().eq("id", id);
   if (error) {
-    alert(error.message);
+    setStatus(editStatus, error.message, "error");
     return;
   }
+  setStatus(editStatus, "Event deleted.", "success");
   await loadEvents();
 }
 
@@ -807,10 +809,10 @@ async function loadUsers() {
         elevate.addEventListener("click", async () => {
           try {
             await api(`/v1/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: "editor" }) });
-            setStatus(usersStatus, "Role updated.");
+            setStatus(usersStatus, "Role updated.", "success");
             loadUsers();
           } catch (error) {
-            setStatus(usersStatus, error.message);
+            setStatus(usersStatus, error.message, "error");
           }
         });
         actions.appendChild(elevate);
@@ -828,10 +830,10 @@ async function loadUsers() {
         roleSelect.addEventListener("change", async () => {
           try {
             await api(`/v1/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: roleSelect.value }) });
-            setStatus(usersStatus, "Role updated.");
+            setStatus(usersStatus, "Role updated.", "success");
             loadUsers();
           } catch (error) {
-            setStatus(usersStatus, error.message);
+            setStatus(usersStatus, error.message, "error");
           }
         });
         actions.appendChild(roleSelect);
@@ -844,10 +846,10 @@ async function loadUsers() {
         remove.addEventListener("click", async () => {
           try {
             await api(`/v1/users/${user.id}`, { method: "DELETE" });
-            setStatus(usersStatus, "User removed.");
+            setStatus(usersStatus, "User removed.", "success");
             loadUsers();
           } catch (error) {
-            setStatus(usersStatus, error.message);
+            setStatus(usersStatus, error.message, "error");
           }
         });
         actions.appendChild(remove);
@@ -1339,9 +1341,9 @@ resetForm.addEventListener("submit", async (event) => {
   const formData = new FormData(resetForm);
   try {
     const result = await api(`/v1/users/${formData.get("user_id")}/reset`, { method: "POST" });
-    setStatus(usersStatus, `Reset link generated: ${result.action_link}`);
+    setStatus(usersStatus, `Reset link generated: ${result.action_link}`, "success");
   } catch (error) {
-    setStatus(usersStatus, error.message);
+    setStatus(usersStatus, error.message, "error");
   }
 });
 

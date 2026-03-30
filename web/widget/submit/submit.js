@@ -36,6 +36,10 @@ const addRowButton = document.getElementById("public-batch-add");
 const fillRowsButton = document.getElementById("public-batch-fill");
 const submitButton = document.getElementById("public-batch-submit");
 const statusBox = document.getElementById("public-batch-status");
+const submitSections = Array.from(document.querySelectorAll(".public-submit-section"));
+const submitSuccessPanel = document.getElementById("public-submit-success");
+const submitSuccessMessage = document.getElementById("public-submit-success-message");
+const submitAgainButton = document.getElementById("public-submit-again");
 const descriptionModal = document.getElementById("description-modal");
 const descriptionEditor = document.getElementById("description-editor");
 const descriptionCounter = document.getElementById("description-counter");
@@ -61,6 +65,32 @@ function setStatus(message, kind = "info") {
   statusBox.classList.remove("success", "error");
   if (kind === "success") statusBox.classList.add("success");
   if (kind === "error") statusBox.classList.add("error");
+}
+
+function showSubmitEditor() {
+  submitSections.forEach((section) => section.classList.remove("hidden"));
+  submitSuccessPanel?.classList.add("hidden");
+}
+
+function showSubmitSuccess(count) {
+  if (submitSuccessMessage) {
+    submitSuccessMessage.textContent = `Thank you for submitting ${count} event${count === 1 ? "" : "s"} and contributing to a more unified events calendar. Your submission is now pending review.`;
+  }
+  submitSections.forEach((section) => section.classList.add("hidden"));
+  submitSuccessPanel?.classList.remove("hidden");
+  submitSuccessPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetSubmitForm() {
+  submitterName.value = "";
+  submitterEmail.value = "";
+  organizerName.value = "";
+  organizerEmail.value = "";
+  submitterNote.value = "";
+  rowsBody.innerHTML = "";
+  statusBox.style.display = "none";
+  addRow();
+  showSubmitEditor();
 }
 
 function sanitizeFilename(name) {
@@ -1212,6 +1242,7 @@ async function submitRows() {
   }
 
   setStatus(`Save successful. Submitted ${payloads.length} event(s) for approval.`, "success");
+  showSubmitSuccess(payloads.length);
 }
 
 addRowButton.addEventListener("click", addRow);
@@ -1240,6 +1271,8 @@ document.addEventListener("keydown", (event) => {
   if (!pickerModal.hidden) closePickerModal(true);
   if (!descriptionModal.hidden) closeDescriptionModal(true);
 });
+
+submitAgainButton?.addEventListener("click", resetSubmitForm);
 
 addRow();
 loadLanguageOptions();

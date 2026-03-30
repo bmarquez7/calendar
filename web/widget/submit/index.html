@@ -22,7 +22,7 @@
         <p>Submit up to 10 events at once. All submissions are marked pending and require admin approval.</p>
       </section>
 
-      <section class="form-card" style="margin-top: 18px;">
+      <section class="form-card public-submit-section" style="margin-top: 18px;">
         <h2>Submitter details</h2>
         <div class="grid-two">
           <input id="submitter-name" type="text" placeholder="Your name" />
@@ -35,7 +35,7 @@
         <textarea id="submitter-note" placeholder="Note for admin"></textarea>
       </section>
 
-      <section class="form-card" style="margin-top: 16px;">
+      <section class="form-card public-submit-section" style="margin-top: 16px;">
         <div class="admin-bar" style="margin-bottom: 10px;">
           <span class="badge" id="public-batch-count">1 / 10 rows</span>
           <button type="button" class="secondary" id="public-batch-add">Add row</button>
@@ -46,6 +46,17 @@
           <button id="public-batch-submit" type="button">Submit for approval</button>
         </div>
         <div class="notice" id="public-batch-status" style="display:none;"></div>
+      </section>
+
+      <section id="public-submit-success" class="form-card public-submit-success hidden" style="margin-top: 18px;">
+        <h2>Thank you for your submission</h2>
+        <p id="public-submit-success-message">
+          Thanks for contributing to a more unified events calendar for Albania.
+        </p>
+        <div class="admin-bar" style="margin-top: 14px;">
+          <button id="public-submit-again" type="button" class="secondary">Submit more events</button>
+          <a class="button-link" href="/widget/">Go to calendar</a>
+        </div>
       </section>
     </div>
 

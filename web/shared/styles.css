@@ -795,6 +795,20 @@ section {
   padding: 14px;
 }
 
+.public-submit-success {
+  text-align: center;
+}
+
+.public-submit-success p {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.public-submit-success .admin-bar {
+  justify-content: center;
+}
+
 .public-submit-card-header {
   display: flex;
   justify-content: space-between;
