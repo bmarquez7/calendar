@@ -15,7 +15,7 @@
   <body>
     <div id="login-gate" class="app admin-login-shell">
       <section>
-        <div class="form-card" style="max-width: 420px;">
+        <div class="form-card" style="max-width: 520px;">
           <h2>Admin sign in</h2>
           <form id="login-form">
             <input type="email" name="email" placeholder="Email" required />
@@ -23,6 +23,21 @@
             <button type="submit">Sign in</button>
           </form>
           <div class="notice" id="login-status" style="display:none;"></div>
+          <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+          <h3>Request admin access</h3>
+          <p class="small">Need backend access? Send a request and we’ll route it to the current admins.</p>
+          <form id="access-request-form">
+            <input type="text" name="name" placeholder="Name (optional)" />
+            <input type="email" name="email" placeholder="Email" required />
+            <select name="requested_role">
+              <option value="moderator">moderator</option>
+              <option value="editor">editor</option>
+              <option value="owner">owner</option>
+            </select>
+            <textarea name="note" placeholder="Tell us why you need admin access (optional)"></textarea>
+            <button type="submit" class="secondary">Request access</button>
+          </form>
+          <div class="notice" id="access-request-status" style="display:none;"></div>
         </div>
       </section>
     </div>
@@ -214,6 +229,21 @@
                   <th>Email</th>
                   <th>User ID</th>
                   <th>Role</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <h3 style="margin-top:18px;">Admin access requests</h3>
+            <table class="table" id="access-requests-table" style="margin-top:12px;">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Requested role</th>
+                  <th>Note</th>
+                  <th>Status</th>
+                  <th>Requested</th>
                   <th>Actions</th>
                 </tr>
               </thead>

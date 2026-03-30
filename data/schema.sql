@@ -76,6 +76,21 @@ create table if not exists public.language_options (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_access_requests (
+  id bigint generated always as identity primary key,
+  name text,
+  email text not null,
+  requested_role text not null default 'moderator' check (requested_role in ('moderator', 'editor', 'owner')),
+  note text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'denied', 'reviewed')),
+  resolved_role text check (resolved_role in ('moderator', 'editor', 'owner')),
+  review_note text,
+  reviewed_at timestamptz,
+  reviewed_by uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.current_admin_role()
 returns text
 language sql
@@ -135,6 +150,11 @@ for each row execute procedure public.set_updated_at();
 drop trigger if exists set_admin_user_roles_updated_at on public.admin_user_roles;
 create trigger set_admin_user_roles_updated_at
 before update on public.admin_user_roles
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists set_admin_access_requests_updated_at on public.admin_access_requests;
+create trigger set_admin_access_requests_updated_at
+before update on public.admin_access_requests
 for each row execute procedure public.set_updated_at();
 
 -- Row Level Security
@@ -217,6 +237,8 @@ grant execute on function public.current_admin_role() to anon, authenticated;
 grant execute on function public.has_admin_role(text) to anon, authenticated;
 
 alter table public.language_options enable row level security;
+
+alter table public.admin_access_requests enable row level security;
 
 drop policy if exists "Public read language options" on public.language_options;
 create policy "Public read language options" on public.language_options

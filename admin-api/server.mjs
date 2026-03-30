@@ -204,12 +204,119 @@ function validateSubmissionRow(row, index) {
 }
 
 async function sendMailSafe(message) {
-  if (!mailTransport || !SMTP_FROM) return;
+  if (!mailTransport || !SMTP_FROM) return false;
   try {
     await mailTransport.sendMail(message);
+    return true;
   } catch (error) {
     app.log.error({ err: error }, "Email send failed");
+    return false;
   }
+}
+
+function adminRedirectUrl() {
+  if (!APP_ORIGIN || APP_ORIGIN === "*") return "";
+  return `${APP_ORIGIN.replace(/\/+$/, "")}/admin/`;
+}
+
+function describeAuthAdminError(error) {
+  const message = String(error?.message || "Unexpected auth error");
+  const redirectUrl = adminRedirectUrl();
+  if (!redirectUrl) return message;
+  if (/redirect|site url|bad request|invalid/i.test(message)) {
+    return `${message}. Check Supabase Auth URL Configuration and make sure ${redirectUrl} is listed in Site URL or Redirect URLs.`;
+  }
+  return message;
+}
+
+async function findUserByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+
+  let page = 1;
+  while (page <= 10) {
+    const listed = await serviceClient.auth.admin.listUsers({ page, perPage: 1000 });
+    if (listed.error) throw listed.error;
+    const users = listed.data?.users || [];
+    const found = users.find((user) => String(user.email || "").trim().toLowerCase() === normalized);
+    if (found) return found;
+    if (users.length < 1000) break;
+    page += 1;
+  }
+
+  return null;
+}
+
+async function sendAdminAccessInviteEmail({ email, role, actionLink = "", existingUser = false }) {
+  const adminUrl = adminRedirectUrl();
+  const lines = existingUser
+    ? [
+        `Your Grow Albania admin access has been updated to: ${role}.`,
+        "",
+        adminUrl ? `Sign in here: ${adminUrl}` : "Sign in to the admin portal using your existing account.",
+        "If you need a password reset, contact the site owner or use the reset-link tool in admin."
+      ]
+    : [
+        `You have been invited to Grow Albania admin access as: ${role}.`,
+        "",
+        actionLink ? `Use this secure invite link to finish setup: ${actionLink}` : "Your invite link could not be generated automatically.",
+        adminUrl ? `Admin portal: ${adminUrl}` : "",
+        "",
+        "If the invite link expires, contact the site owner for a fresh invite."
+      ].filter(Boolean);
+
+  return sendMailSafe({
+    from: SMTP_FROM,
+    to: email,
+    subject: existingUser ? "Your Grow Albania admin access was updated" : "You're invited to Grow Albania admin",
+    text: lines.join("\n")
+  });
+}
+
+async function grantAdminAccess(email, role) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error("Email required");
+  }
+
+  const redirectTo = adminRedirectUrl() || undefined;
+  let existingUser = await findUserByEmail(normalizedEmail);
+  let actionLink = null;
+
+  if (!existingUser) {
+    const generated = await serviceClient.auth.admin.generateLink({
+      type: "invite",
+      email: normalizedEmail,
+      options: redirectTo ? { redirectTo } : undefined
+    });
+    if (generated.error) {
+      throw new Error(describeAuthAdminError(generated.error));
+    }
+    existingUser = generated.data?.user || null;
+    actionLink = generated.data?.properties?.action_link || null;
+    if (!existingUser?.id) {
+      throw new Error("Invite link was generated without a user record.");
+    }
+  }
+
+  const upsert = await serviceClient
+    .from("admin_user_roles")
+    .upsert({ user_id: existingUser.id, email: normalizedEmail, role }, { onConflict: "user_id" });
+  if (upsert.error) throw upsert.error;
+
+  const emailSent = await sendAdminAccessInviteEmail({
+    email: normalizedEmail,
+    role,
+    actionLink,
+    existingUser: Boolean(actionLink === null)
+  });
+
+  return {
+    user: existingUser,
+    actionLink,
+    emailSent,
+    existingUser: Boolean(actionLink === null)
+  };
 }
 
 async function notifyAdminOfSubmission(insertedRows) {
@@ -267,6 +374,74 @@ async function sendConfirmationEmails(insertedRows) {
       })
     )
   );
+}
+
+async function notifyAdminOfAccessRequest(requestRow) {
+  if (!emailRecipients.length) return;
+  await sendMailSafe({
+    from: SMTP_FROM,
+    to: emailRecipients.join(", "),
+    subject: "New admin access request",
+    text: [
+      "A user requested admin access.",
+      "",
+      `Name: ${requestRow.name || "Not provided"}`,
+      `Email: ${requestRow.email}`,
+      `Requested role: ${requestRow.requested_role || "moderator"}`,
+      requestRow.note ? `Note: ${requestRow.note}` : "",
+      "",
+      `Review in admin: ${adminRedirectUrl() || "Open the admin users page"}`
+    ]
+      .filter(Boolean)
+      .join("\n")
+  });
+}
+
+async function sendAccessRequestReceipt(requestRow) {
+  if (!requestRow?.email) return;
+  await sendMailSafe({
+    from: SMTP_FROM,
+    to: requestRow.email,
+    subject: "We received your Grow Albania admin access request",
+    text: [
+      "Thanks for reaching out.",
+      "Your admin access request has been received and is now pending review.",
+      "",
+      `Requested role: ${requestRow.requested_role || "moderator"}`,
+      requestRow.note ? `Your note: ${requestRow.note}` : "",
+      "",
+      "We’ll email you when a decision is made."
+    ]
+      .filter(Boolean)
+      .join("\n")
+  });
+}
+
+async function sendAccessRequestDecisionEmail(requestRow, status, reviewNote, approvedRole = "") {
+  if (!requestRow?.email) return;
+  const subject = status === "approved"
+    ? "Your Grow Albania admin access request was approved"
+    : "Update on your Grow Albania admin access request";
+  const intro = status === "approved"
+    ? `Your request was approved${approvedRole ? ` as ${approvedRole}` : ""}.`
+    : status === "denied"
+      ? "Your admin access request was reviewed and was not approved."
+      : "Your admin access request has been reviewed.";
+
+  await sendMailSafe({
+    from: SMTP_FROM,
+    to: requestRow.email,
+    subject,
+    text: [
+      intro,
+      reviewNote ? "" : "",
+      reviewNote ? "Additional information from the admin:" : "",
+      reviewNote || "",
+      status === "approved" && adminRedirectUrl() ? `Admin portal: ${adminRedirectUrl()}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n")
+  });
 }
 
 function reviewSubject(status) {
@@ -349,6 +524,7 @@ app.addHook("preHandler", async (request, reply) => {
   const path = request.raw.url || "";
   if (!path.startsWith("/v1/")) return;
   if (path.startsWith("/v1/health") || path.startsWith("/v1/public-submissions") || path.startsWith("/v1/language-options")) return;
+  if (request.method === "POST" && path.startsWith("/v1/admin-access-requests")) return;
   const auth = request.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) {
@@ -435,6 +611,38 @@ app.post("/v1/public-submissions", async (request, reply) => {
   return { ok: true, inserted: rows.length };
 });
 
+app.post("/v1/admin-access-requests", async (request, reply) => {
+  const email = String(request.body?.email || "").trim().toLowerCase();
+  const name = String(request.body?.name || "").trim();
+  const note = String(request.body?.note || "").trim();
+  const requestedRole = String(request.body?.requested_role || "moderator").trim();
+
+  if (!email) return reply.code(400).send({ error: "Email is required" });
+  if (!["moderator", "editor", "owner"].includes(requestedRole)) {
+    return reply.code(400).send({ error: "Invalid requested role" });
+  }
+
+  const inserted = await serviceClient
+    .from("admin_access_requests")
+    .insert({
+      name: name || null,
+      email,
+      note: note || null,
+      requested_role: requestedRole,
+      status: "pending"
+    })
+    .select("*")
+    .maybeSingle();
+  if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
+
+  await Promise.all([
+    notifyAdminOfAccessRequest(inserted.data),
+    sendAccessRequestReceipt(inserted.data)
+  ]);
+
+  return { ok: true };
+});
+
 app.get("/v1/language-options", async (_, reply) => {
   const listed = await serviceClient
     .from("language_options")
@@ -472,6 +680,88 @@ app.post("/v1/language-options", async (request, reply) => {
   if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
 
   return { ok: true, created: true, language: inserted.data };
+});
+
+app.get("/v1/admin-access-requests", async (request, reply) => {
+  if (!canRole(request.role, "editor")) return reply.code(403).send({ error: "Editor+ required" });
+
+  const listed = await serviceClient
+    .from("admin_access_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (listed.error) return reply.code(500).send({ error: listed.error.message });
+
+  const requests = (listed.data || []).sort((a, b) => {
+    const statusRank = { pending: 0, approved: 1, denied: 2, reviewed: 3 };
+    const statusDiff = (statusRank[a.status] ?? 99) - (statusRank[b.status] ?? 99);
+    if (statusDiff !== 0) return statusDiff;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+
+  return { requests };
+});
+
+app.patch("/v1/admin-access-requests/:requestId", async (request, reply) => {
+  if (!canRole(request.role, "editor")) return reply.code(403).send({ error: "Editor+ required" });
+
+  const { requestId } = request.params;
+  const { status, role = "moderator", review_note = null } = request.body || {};
+  if (!["approved", "denied", "reviewed"].includes(status)) {
+    return reply.code(400).send({ error: "Invalid request status" });
+  }
+  if (!["moderator", "editor", "owner"].includes(role)) {
+    return reply.code(400).send({ error: "Invalid admin role" });
+  }
+  if ((role === "editor" || role === "owner") && !canRole(request.role, "owner")) {
+    return reply.code(403).send({ error: "Only owner can approve editor/owner access" });
+  }
+
+  const current = await serviceClient
+    .from("admin_access_requests")
+    .select("*")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (current.error) return reply.code(500).send({ error: current.error.message });
+  if (!current.data) return reply.code(404).send({ error: "Access request not found" });
+
+  let inviteResult = null;
+  if (status === "approved") {
+    try {
+      inviteResult = await grantAdminAccess(current.data.email, role);
+    } catch (error) {
+      return reply.code(500).send({ error: error.message || "Could not grant admin access" });
+    }
+  }
+
+  const updated = await serviceClient
+    .from("admin_access_requests")
+    .update({
+      status,
+      resolved_role: status === "approved" ? role : null,
+      review_note: review_note ? String(review_note).trim() : null,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: request.user?.id || null
+    })
+    .eq("id", requestId)
+    .select("*")
+    .maybeSingle();
+  if (updated.error) return reply.code(500).send({ error: updated.error.message });
+
+  if (status !== "approved") {
+    await sendAccessRequestDecisionEmail(updated.data || current.data, status, updated.data?.review_note || null, "");
+  }
+
+  return {
+    ok: true,
+    request: updated.data || current.data,
+    invite: inviteResult
+      ? {
+          email_sent: inviteResult.emailSent,
+          action_link: inviteResult.emailSent ? null : inviteResult.actionLink,
+          existing_user: inviteResult.existingUser
+        }
+      : null
+  };
 });
 
 app.post("/v1/events/:eventId/review", async (request, reply) => {
@@ -536,24 +826,29 @@ app.get("/v1/users", async (request, reply) => {
 
 app.post("/v1/users/invite", async (request, reply) => {
   if (!canRole(request.role, "editor")) return reply.code(403).send({ error: "Editor+ required" });
-  const { email, role = "moderator" } = request.body || {};
+  const email = String(request.body?.email || "").trim().toLowerCase();
+  const { role = "moderator" } = request.body || {};
   if (!email) return reply.code(400).send({ error: "Email required" });
   if (!["moderator", "editor", "owner"].includes(role)) return reply.code(400).send({ error: "Invalid role" });
   if (role !== "moderator" && !canRole(request.role, "owner")) {
     return reply.code(403).send({ error: "Only owner can invite editor/owner" });
   }
 
-  const invited = await serviceClient.auth.admin.inviteUserByEmail(email);
-  if (invited.error) return reply.code(500).send({ error: invited.error.message });
-  const user = invited.data?.user;
-  if (!user?.id) return reply.code(500).send({ error: "Invite returned no user" });
-
-  const upsert = await serviceClient
-    .from("admin_user_roles")
-    .upsert({ user_id: user.id, email, role }, { onConflict: "user_id" });
-  if (upsert.error) return reply.code(500).send({ error: upsert.error.message });
-
-  return { ok: true, email, user_id: user.id, role };
+  try {
+    const granted = await grantAdminAccess(email, role);
+    return {
+      ok: true,
+      email,
+      user_id: granted.user.id,
+      role,
+      email_sent: granted.emailSent,
+      action_link: granted.emailSent ? null : granted.actionLink,
+      existing_user: granted.existingUser,
+      admin_url: adminRedirectUrl() || null
+    };
+  } catch (error) {
+    return reply.code(500).send({ error: error.message || "Could not invite user" });
+  }
 });
 
 app.patch("/v1/users/:userId/role", async (request, reply) => {

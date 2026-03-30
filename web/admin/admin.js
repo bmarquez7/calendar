@@ -8,6 +8,8 @@ const loginGate = document.getElementById("login-gate");
 const protectedApp = document.getElementById("protected-app");
 const loginForm = document.getElementById("login-form");
 const loginStatus = document.getElementById("login-status");
+const accessRequestForm = document.getElementById("access-request-form");
+const accessRequestStatus = document.getElementById("access-request-status");
 const logoutButton = document.getElementById("logout");
 const rolePill = document.getElementById("role-pill");
 
@@ -34,6 +36,7 @@ const batchFillFiftyButton = document.getElementById("batch-fill-fifty");
 const usersSection = document.getElementById("users-section");
 const usersStatus = document.getElementById("users-status");
 const usersTableBody = document.querySelector("#users-table tbody");
+const accessRequestsTableBody = document.querySelector("#access-requests-table tbody");
 const inviteForm = document.getElementById("invite-form");
 const resetForm = document.getElementById("reset-form");
 
@@ -68,6 +71,7 @@ function writeStoredTaskPage(pageId) {
 }
 
 let currentEvents = [];
+let currentAccessRequests = [];
 let selectedId = null;
 let currentRole = null;
 let accessToken = null;
@@ -269,6 +273,41 @@ async function api(path, options = {}) {
   return payload;
 }
 
+async function publicApi(path, options = {}) {
+  const response = await fetch(`${ADMIN_API_URL}${path}`, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function inviteResultMessage(result) {
+  if (result?.email_sent) {
+    return result.existing_user
+      ? `Access updated and email sent to ${result.email}.`
+      : `Invitation sent to ${result.email}.`;
+  }
+  if (result?.action_link) {
+    return `Access created for ${result.email}. Share this invite link manually: ${result.action_link}`;
+  }
+  if (result?.existing_user) {
+    return `Access granted to existing user ${result.email}. They can sign in at ${result.admin_url || `${ADMIN_API_URL}/admin/`}.`;
+  }
+  return `Access updated for ${result?.email || "user"}.`;
+}
+
+function availableRequestRoles() {
+  return hasRole("owner") ? ["moderator", "editor", "owner"] : ["moderator"];
+}
+
 function applyRoleUi() {
   rolePill.textContent = `role: ${currentRole || "none"}`;
 
@@ -296,9 +335,11 @@ function setAuthUi(session) {
     adminCount.textContent = "0 events";
     adminTableBody.innerHTML = "";
     usersTableBody.innerHTML = "";
+    if (accessRequestsTableBody) accessRequestsTableBody.innerHTML = "";
     selectedId = null;
     currentRole = null;
     accessToken = null;
+    currentAccessRequests = [];
     showTaskHub();
   }
 }
@@ -783,8 +824,94 @@ async function loadUsers() {
 
       usersTableBody.appendChild(row);
     });
+
+    await loadAccessRequests();
   } catch (error) {
     setStatus(usersStatus, error.message);
+  }
+}
+
+function renderAccessRequests() {
+  if (!accessRequestsTableBody) return;
+  accessRequestsTableBody.innerHTML = "";
+
+  currentAccessRequests.forEach((request) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(request.name || "—")}</td>
+      <td>${escapeHtml(request.email || "")}</td>
+      <td>${escapeHtml(request.requested_role || "moderator")}</td>
+      <td>${escapeHtml(request.note || "—")}</td>
+      <td><span class="status-pill">${escapeHtml(request.status || "pending")}</span></td>
+      <td>${escapeHtml(request.created_at ? new Date(request.created_at).toLocaleString() : "")}</td>
+      <td></td>
+    `;
+
+    const actions = row.querySelector("td:last-child");
+    const roleSelect = document.createElement("select");
+    availableRequestRoles().forEach((role) => {
+      const option = document.createElement("option");
+      option.value = role;
+      option.textContent = role;
+      option.selected = (request.requested_role || "moderator") === role;
+      roleSelect.appendChild(option);
+    });
+    roleSelect.disabled = request.status === "approved";
+    actions.appendChild(roleSelect);
+
+    const approve = document.createElement("button");
+    approve.textContent = request.status === "approved" ? "Approved" : "Approve";
+    approve.disabled = request.status === "approved";
+    approve.addEventListener("click", async () => {
+      try {
+        const result = await api(`/v1/admin-access-requests/${request.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "approved", role: roleSelect.value })
+        });
+        const invite = result?.invite || {};
+        const inviteMessage = invite.action_link
+          ? ` Approved request for ${request.email}. Share this invite link manually: ${invite.action_link}`
+          : invite.email_sent
+            ? ` Approved request for ${request.email} and sent the access email.`
+            : ` Approved request for ${request.email}.`;
+        setStatus(usersStatus, inviteMessage.trim(), "success");
+        await loadUsers();
+      } catch (error) {
+        setStatus(usersStatus, error.message, "error");
+      }
+    });
+    actions.appendChild(approve);
+
+    const deny = document.createElement("button");
+    deny.className = "secondary";
+    deny.textContent = "Deny";
+    deny.disabled = request.status === "denied";
+    deny.addEventListener("click", async () => {
+      try {
+        await api(`/v1/admin-access-requests/${request.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "denied" })
+        });
+        setStatus(usersStatus, `Denied access request for ${request.email}.`, "success");
+        await loadUsers();
+      } catch (error) {
+        setStatus(usersStatus, error.message, "error");
+      }
+    });
+    actions.appendChild(deny);
+
+    accessRequestsTableBody.appendChild(row);
+  });
+}
+
+async function loadAccessRequests() {
+  if (!hasRole("editor")) return;
+  try {
+    const result = await api("/v1/admin-access-requests", { method: "GET" });
+    currentAccessRequests = result?.requests || [];
+    renderAccessRequests();
+  } catch (error) {
+    setStatus(usersStatus, error.message, "error");
   }
 }
 
@@ -1096,6 +1223,26 @@ batchFillFiftyButton.addEventListener("click", () => {
   }
 });
 
+accessRequestForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(accessRequestForm);
+  try {
+    await publicApi("/v1/admin-access-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        name: formData.get("name"),
+        email: formData.get("email"),
+        requested_role: formData.get("requested_role"),
+        note: formData.get("note")
+      })
+    });
+    setStatus(accessRequestStatus, "Request sent. We’ll email you after review.", "success");
+    accessRequestForm.reset();
+  } catch (error) {
+    setStatus(accessRequestStatus, error.message, "error");
+  }
+});
+
 inviteForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!hasRole("editor")) {
@@ -1113,11 +1260,12 @@ inviteForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ email: formData.get("email"), role })
     });
-    setStatus(usersStatus, `Invitation sent to ${result.email}.`);
+    setStatus(usersStatus, inviteResultMessage(result), "success");
     inviteForm.reset();
+    inviteForm.querySelector("select[name='role']").value = "moderator";
     loadUsers();
   } catch (error) {
-    setStatus(usersStatus, error.message);
+    setStatus(usersStatus, error.message, "error");
   }
 });
 
