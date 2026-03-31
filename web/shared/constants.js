@@ -45,6 +45,9 @@ function formatAreaOptionLabel(english, albanian) {
   return `${english} / ${albanian}`;
 }
 
+const TBD_AREA_VALUE = "TBD";
+const TBD_AREA_LABEL = "TBD / Për t'u përcaktuar";
+
 const TIRANA_AREA_ENTRIES = [
   { albanian: "21 Dhjetori", english: "21 December", type: "neighborhood" },
   { albanian: "Air Albania", english: "Air Albania Stadium", type: "landmark" },
@@ -190,6 +193,12 @@ Object.entries(LEGACY_TIRANA_AREA_ALIASES).forEach(([alias, canonical]) => {
   registerAreaAlias(alias, canonical);
 });
 
+registerAreaAlias(TBD_AREA_VALUE, TBD_AREA_VALUE);
+registerAreaAlias("To Be Decided", TBD_AREA_VALUE);
+registerAreaAlias("Per t'u percaktuar", TBD_AREA_VALUE);
+registerAreaAlias("Për t'u përcaktuar", TBD_AREA_VALUE);
+registerAreaAlias(TBD_AREA_LABEL, TBD_AREA_VALUE);
+
 export const TIRANA_AREAS = TIRANA_AREA_ENTRIES.map((entry) => entry.english);
 
 export const OTHER_CITIES = sortUnique([
@@ -243,12 +252,16 @@ export const AREA_GROUPS = [
       .map((entry) => ({ value: entry.english, label: formatAreaOptionLabel(entry.english, entry.albanian) }))
   })),
   {
+    label: "LOCATION TBD",
+    options: [{ value: TBD_AREA_VALUE, label: TBD_AREA_LABEL }]
+  },
+  {
     label: "OTHER CITIES, MAY NOT GET FEATURED",
     options: OTHER_CITIES.map((value) => ({ value, label: value }))
   }
 ];
 
-export const AREAS = [...TIRANA_AREAS, ...OTHER_CITIES];
+export const AREAS = [...TIRANA_AREAS, TBD_AREA_VALUE, ...OTHER_CITIES];
 
 export function normalizeAreaValue(area) {
   const raw = String(area || "").trim();
@@ -258,7 +271,7 @@ export function normalizeAreaValue(area) {
 
 export function formatAreaLabel(area) {
   const normalized = normalizeAreaValue(area);
-  return TIRANA_AREA_LABELS.get(normalized) || normalized;
+  return TIRANA_AREA_LABELS.get(normalized) || (normalized === TBD_AREA_VALUE ? TBD_AREA_LABEL : normalized);
 }
 
 export function isFeaturedEligibleArea(area) {
