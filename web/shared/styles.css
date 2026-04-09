@@ -464,8 +464,8 @@ section {
 
 .task-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-top: 12px;
 }
 
@@ -474,13 +474,16 @@ section {
 }
 
 .task-card {
-  text-align: left;
-  min-height: 92px;
+  text-align: center;
+  min-height: 0;
   background: var(--surface-2);
   color: var(--ink);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 12px 10px;
 }
 
 .task-card:hover {
@@ -885,6 +888,7 @@ section {
   border-radius: var(--radius);
   background: var(--surface-2);
   padding: 14px;
+  overflow-x: clip;
 }
 
 .public-submit-success {
@@ -917,7 +921,7 @@ section {
 .public-submit-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   align-items: stretch;
 }
 
@@ -925,10 +929,12 @@ section {
   display: grid;
   gap: 6px;
   align-content: start;
+  min-width: 0;
 }
 
 .picker-modal-content {
   max-width: 760px;
+  width: min(760px, calc(100vw - 24px));
 }
 
 .picker-modal-body {
@@ -973,6 +979,7 @@ section {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -1215,6 +1222,26 @@ section {
   }
 }
 
+@media (max-width: 1180px) {
+  .task-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .featured-image-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .task-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .featured-image-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .app {
     padding: 18px 14px 40px;
@@ -1246,6 +1273,10 @@ section {
 
   .public-submit-language-other {
     grid-template-columns: 1fr;
+  }
+
+  .featured-image-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .featured-box,

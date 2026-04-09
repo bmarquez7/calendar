@@ -13,6 +13,10 @@ import {
 } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const FEATURED_FIXED_COUNT = 5;
+const FEATURED_TOTAL_COUNT = 10;
+const FEATURED_ROTATE_COUNT = FEATURED_TOTAL_COUNT - FEATURED_FIXED_COUNT;
+const FEATURED_ROTATION_MS = 45_000;
 
 const state = {
   events: [],
@@ -121,6 +125,7 @@ const eventModal = document.getElementById("event-modal");
 const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
 const featuredColorCache = new Map();
+let featuredRotationTimer = null;
 
 state.weekStart = startOfWeek(new Date());
 
@@ -617,14 +622,51 @@ function featuredFallbackSort(a, b) {
   return new Date(b.date_start || 0) - new Date(a.date_start || 0);
 }
 
-function getHighlightedEvents() {
+function getFeaturedCandidateEvents() {
   const selected = state.events
     .filter((event) => event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
   const fallback = state.events
     .filter((event) => !event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort(featuredFallbackSort);
-  return [...selected, ...fallback].slice(0, 10);
+  return [...selected, ...fallback];
+}
+
+function pickRotatingFeaturedEvents(pool, count) {
+  if (pool.length <= count) return pool.slice();
+  const pageCount = Math.ceil(pool.length / count);
+  const pageIndex = Math.floor(Date.now() / FEATURED_ROTATION_MS) % pageCount;
+  const startIndex = pageIndex * count;
+  const rotated = [];
+  for (let step = 0; step < pool.length && rotated.length < count; step += 1) {
+    const event = pool[(startIndex + step) % pool.length];
+    if (event && !rotated.includes(event)) rotated.push(event);
+  }
+  return rotated;
+}
+
+function getHighlightedEvents() {
+  const candidates = getFeaturedCandidateEvents();
+  const fixedRow = candidates.slice(0, FEATURED_FIXED_COUNT);
+  const rotatingPool = candidates.slice(FEATURED_FIXED_COUNT).filter((event) => !fixedRow.includes(event));
+  const rotatingRow = pickRotatingFeaturedEvents(rotatingPool, FEATURED_ROTATE_COUNT);
+  return [...fixedRow, ...rotatingRow];
+}
+
+function ensureFeaturedRotation() {
+  const candidateCount = Math.max(0, getFeaturedCandidateEvents().length - FEATURED_FIXED_COUNT);
+  if (candidateCount <= FEATURED_ROTATE_COUNT) {
+    if (featuredRotationTimer) {
+      clearInterval(featuredRotationTimer);
+      featuredRotationTimer = null;
+    }
+    return;
+  }
+  if (!featuredRotationTimer) {
+    featuredRotationTimer = window.setInterval(() => {
+      renderFeatured();
+    }, FEATURED_ROTATION_MS);
+  }
 }
 
 function renderEvents() {
@@ -715,12 +757,13 @@ function renderEvents() {
 }
 
 function renderFeatured() {
+  ensureFeaturedRotation();
   const items = getHighlightedEvents();
   const placeholderImage = state.settings?.featured_placeholder_image_url || "";
 
   featuredGrid.innerHTML = "";
   const list = [...items];
-  while (list.length < 10) {
+  while (list.length < FEATURED_TOTAL_COUNT) {
     list.push(null);
   }
 
