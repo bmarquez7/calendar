@@ -728,6 +728,12 @@ section {
   align-items: center;
 }
 
+.admin-bulk-bar.admin-queue-toolbar {
+  flex-wrap: wrap;
+  overflow: visible;
+  align-items: flex-start;
+}
+
 .admin-queue-toolbar {
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -772,12 +778,11 @@ section {
 }
 
 .admin-actions {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(88px, 1fr));
   gap: 6px;
-  align-items: center;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  align-items: stretch;
+  width: 100%;
 }
 
 .admin-actions button,
@@ -789,9 +794,35 @@ section {
   white-space: nowrap;
 }
 
+.admin-actions button {
+  width: 100%;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
 .admin-queue-toolbar .badge,
 .admin-queue-toolbar .bulk-checkbox-label {
   white-space: nowrap;
+}
+
+.admin-bulk-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  gap: 6px;
+  flex: 1 1 540px;
+  min-width: min(100%, 540px);
+}
+
+.admin-bulk-actions button {
+  width: 100%;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .admin-table-child td {
@@ -1316,6 +1347,16 @@ section {
   .admin-queue-toolbar {
     flex-direction: row;
     align-items: center;
+  }
+
+  .admin-bulk-bar.admin-queue-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-actions,
+  .admin-bulk-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero-top {
