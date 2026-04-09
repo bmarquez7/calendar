@@ -177,6 +177,109 @@ function normalizeSubmissionRow(row) {
   };
 }
 
+function normalizeDuplicateValue(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dateKeyInTirana(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Tirane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}`;
+}
+
+function duplicateEventKey(row) {
+  const dayKey = dateKeyInTirana(row?.date_start);
+  const titleKey = normalizeDuplicateValue(row?.title_en);
+  if (!dayKey || !titleKey) return "";
+  const areaKey = normalizeDuplicateValue(row?.area);
+  const locationKey = normalizeDuplicateValue(row?.location_en || row?.location_es || row?.location_sq || row?.area);
+  return [dayKey, titleKey, areaKey, locationKey].join("|");
+}
+
+function duplicateEventLabel(row) {
+  const title = String(row?.title_en || "Untitled").trim();
+  const dayKey = dateKeyInTirana(row?.date_start) || "unknown date";
+  const area = String(row?.area || "").trim();
+  return area ? `${title} on ${dayKey} (${area})` : `${title} on ${dayKey}`;
+}
+
+async function findDuplicateEventConflicts(candidateRows, options = {}) {
+  const filteredRows = candidateRows.filter((row) => (row?.status || "pending") !== "denied");
+  if (!filteredRows.length) {
+    return { existingConflicts: [], internalConflicts: [] };
+  }
+
+  const parsedDates = filteredRows
+    .map((row) => new Date(row.date_start))
+    .filter((date) => !Number.isNaN(date.getTime()));
+  if (!parsedDates.length) {
+    return { existingConflicts: [], internalConflicts: [] };
+  }
+
+  const minTime = Math.min(...parsedDates.map((date) => date.getTime())) - (24 * 60 * 60 * 1000);
+  const maxTime = Math.max(...parsedDates.map((date) => date.getTime())) + (24 * 60 * 60 * 1000);
+  const excludeIds = new Set((options.excludeIds || []).map((value) => String(value || "")).filter(Boolean));
+
+  const listed = await serviceClient
+    .from("events")
+    .select("id, status, title_en, area, location_en, location_es, location_sq, date_start")
+    .neq("status", "denied")
+    .gte("date_start", new Date(minTime).toISOString())
+    .lte("date_start", new Date(maxTime).toISOString());
+  if (listed.error) throw listed.error;
+
+  const existingByKey = new Map();
+  (listed.data || [])
+    .filter((row) => !excludeIds.has(String(row.id || "")))
+    .forEach((row) => {
+      const key = duplicateEventKey(row);
+      if (key && !existingByKey.has(key)) existingByKey.set(key, row);
+    });
+
+  const existingConflicts = [];
+  const internalConflicts = [];
+  const seenKeys = new Map();
+
+  filteredRows.forEach((row, index) => {
+    const key = duplicateEventKey(row);
+    if (!key) return;
+    const existing = existingByKey.get(key);
+    if (existing) existingConflicts.push({ index, row, existing });
+    if (seenKeys.has(key)) internalConflicts.push({ index, row, firstIndex: seenKeys.get(key) });
+    else seenKeys.set(key, index);
+  });
+
+  return { existingConflicts, internalConflicts };
+}
+
+function duplicateConflictErrorMessage(conflicts) {
+  const parts = [];
+  if (conflicts.existingConflicts.length) {
+    parts.push(`Already exists: ${conflicts.existingConflicts.slice(0, 3).map(({ row }) => duplicateEventLabel(row)).join("; ")}`);
+  }
+  if (conflicts.internalConflicts.length) {
+    parts.push(`Repeated in this submission: ${conflicts.internalConflicts.slice(0, 3).map(({ row }) => duplicateEventLabel(row)).join("; ")}`);
+  }
+  return `Duplicate same-day event detected. ${parts.join(" | ")}`.trim();
+}
+
 function validateSubmissionRow(row, index) {
   const required = [
     row.title_en,
@@ -682,6 +785,15 @@ app.post("/v1/public-submissions", async (request, reply) => {
     }
   }
 
+  try {
+    const duplicateConflicts = await findDuplicateEventConflicts(normalized);
+    if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+      return reply.code(409).send({ error: duplicateConflictErrorMessage(duplicateConflicts) });
+    }
+  } catch (error) {
+    return reply.code(500).send({ error: error.message });
+  }
+
   const inserted = await serviceClient.from("events").insert(normalized).select("*");
   if (inserted.error) return reply.code(500).send({ error: inserted.error.message });
 
@@ -907,6 +1019,17 @@ app.post("/v1/events/:eventId/review", async (request, reply) => {
   };
   if (status !== "approved") patch.is_highlighted = false;
 
+  if (status === "approved") {
+    try {
+      const duplicateConflicts = await findDuplicateEventConflicts([{ ...current.data, ...patch }], { excludeIds: [eventId] });
+      if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+        return reply.code(409).send({ error: duplicateConflictErrorMessage(duplicateConflicts) });
+      }
+    } catch (error) {
+      return reply.code(500).send({ error: error.message });
+    }
+  }
+
   const updated = await serviceClient.from("events").update(patch).eq("id", eventId).select("*").maybeSingle();
   if (updated.error) return reply.code(500).send({ error: updated.error.message });
 
@@ -941,6 +1064,20 @@ app.post("/v1/events/review-bulk", async (request, reply) => {
     admin_response_note: note
   };
   if (status !== "approved") patch.is_highlighted = false;
+
+  if (status === "approved") {
+    try {
+      const duplicateConflicts = await findDuplicateEventConflicts(
+        currentRows.map((row) => ({ ...row, ...patch })),
+        { excludeIds: eventIds }
+      );
+      if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+        return reply.code(409).send({ error: duplicateConflictErrorMessage(duplicateConflicts) });
+      }
+    } catch (error) {
+      return reply.code(500).send({ error: error.message });
+    }
+  }
 
   const updated = await serviceClient.from("events").update(patch).in("id", eventIds).select("*");
   if (updated.error) return reply.code(500).send({ error: updated.error.message });

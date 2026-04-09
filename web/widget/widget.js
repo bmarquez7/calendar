@@ -497,6 +497,85 @@ function toDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeDuplicateValue(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dateKeyInTirana(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Tirane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}`;
+}
+
+function duplicateEventKey(event) {
+  const dayKey = dateKeyInTirana(event.date_start);
+  const titleKey = normalizeDuplicateValue(event.title_en || pickText(event, "title"));
+  if (!dayKey || !titleKey) return "";
+  const areaKey = normalizeDuplicateValue(normalizeAreaValue(event.area));
+  const locationKey = normalizeDuplicateValue(event.location_en || event.location_es || event.location_sq || normalizeAreaValue(event.area));
+  return [dayKey, titleKey, areaKey, locationKey].join("|");
+}
+
+function duplicateEventScore(event) {
+  let score = 0;
+  if (event.is_highlighted) score += 100;
+  if (getEventImages(event).length) score += 10;
+  if (event.ticket_url) score += 2;
+  if (event.source_url) score += 1;
+  if (String(event.description_en || "").trim()) score += 1;
+  return score;
+}
+
+function preferDuplicateEvent(existingEvent, incomingEvent) {
+  const scoreDiff = duplicateEventScore(incomingEvent) - duplicateEventScore(existingEvent);
+  if (scoreDiff !== 0) return scoreDiff > 0 ? incomingEvent : existingEvent;
+  const createdDiff = new Date(incomingEvent.created_at || 0) - new Date(existingEvent.created_at || 0);
+  if (createdDiff !== 0) return createdDiff > 0 ? incomingEvent : existingEvent;
+  return new Date(incomingEvent.date_start || 0) < new Date(existingEvent.date_start || 0) ? incomingEvent : existingEvent;
+}
+
+function dedupeEvents(events) {
+  const deduped = [];
+  const duplicateMap = new Map();
+
+  events.forEach((event) => {
+    const key = duplicateEventKey(event);
+    if (!key) {
+      deduped.push(event);
+      return;
+    }
+    const existing = duplicateMap.get(key);
+    if (!existing) {
+      duplicateMap.set(key, event);
+      return;
+    }
+    duplicateMap.set(key, preferDuplicateEvent(existing, event));
+  });
+
+  return [...deduped, ...duplicateMap.values()].sort((a, b) => {
+    const startDiff = new Date(a.date_start || 0) - new Date(b.date_start || 0);
+    if (startDiff !== 0) return startDiff;
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+}
+
 function startOfWeek(date) {
   const result = new Date(date);
   const day = (result.getDay() + 6) % 7;
@@ -995,9 +1074,9 @@ async function loadEvents() {
     return;
   }
   const now = new Date();
-  state.events = (data || [])
+  state.events = dedupeEvents((data || [])
     .map((event) => ({ ...event, area: normalizeAreaValue(event.area) }))
-    .filter((event) => isPublicEventActive(event, now));
+    .filter((event) => isPublicEventActive(event, now)));
   render();
 }
 

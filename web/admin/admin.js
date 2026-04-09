@@ -278,6 +278,90 @@ function normalizeTitleGroupKey(title) {
   return normalizeSearchValue(title);
 }
 
+function dateKeyInTirana(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Tirane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}`;
+}
+
+function duplicateKeyFromEventLike(event) {
+  const dayKey = dateKeyInTirana(event.date_start);
+  const titleKey = normalizeSearchValue(event.title_en);
+  if (!dayKey || !titleKey) return "";
+  const areaKey = normalizeSearchValue(normalizeAreaValue(event.area));
+  const locationKey = normalizeSearchValue(event.location_en || event.location_es || event.location_sq || normalizeAreaValue(event.area));
+  return [dayKey, titleKey, areaKey, locationKey].join("|");
+}
+
+function duplicateLabelFromEventLike(event) {
+  const title = String(event.title_en || "Untitled").trim();
+  const dayKey = dateKeyInTirana(event.date_start) || "unknown date";
+  const areaLabel = formatAreaLabel(event.area || "");
+  return areaLabel ? `${title} on ${dayKey} (${areaLabel})` : `${title} on ${dayKey}`;
+}
+
+function findDuplicateConflicts(candidateRows, options = {}) {
+  const excludeIds = new Set((options.excludeIds || []).map((value) => String(value || "")).filter(Boolean));
+  const activeExistingByKey = new Map();
+  currentEvents
+    .filter((event) => event.status !== "denied" && !excludeIds.has(String(event.id || "")))
+    .forEach((event) => {
+      const key = duplicateKeyFromEventLike(event);
+      if (key && !activeExistingByKey.has(key)) activeExistingByKey.set(key, event);
+    });
+
+  const existingConflicts = [];
+  const internalConflicts = [];
+  const seenCandidateKeys = new Map();
+
+  candidateRows
+    .filter((event) => (event.status || "approved") !== "denied")
+    .forEach((event, index) => {
+      const key = duplicateKeyFromEventLike(event);
+      if (!key) return;
+      const existing = activeExistingByKey.get(key);
+      if (existing) {
+        existingConflicts.push({ index, event, existing });
+      }
+      if (seenCandidateKeys.has(key)) {
+        internalConflicts.push({ index, event, firstIndex: seenCandidateKeys.get(key) });
+      } else {
+        seenCandidateKeys.set(key, index);
+      }
+    });
+
+  return { existingConflicts, internalConflicts };
+}
+
+function duplicateConflictMessage(conflicts) {
+  const parts = [];
+  if (conflicts.existingConflicts.length) {
+    const preview = conflicts.existingConflicts
+      .slice(0, 3)
+      .map(({ event }) => duplicateLabelFromEventLike(event))
+      .join("; ");
+    parts.push(`Already exists: ${preview}`);
+  }
+  if (conflicts.internalConflicts.length) {
+    const preview = conflicts.internalConflicts
+      .slice(0, 3)
+      .map(({ event }) => duplicateLabelFromEventLike(event))
+      .join("; ");
+    parts.push(`Repeated in this save: ${preview}`);
+  }
+  return `Duplicate same-day event detected. ${parts.join(" | ")}`.trim();
+}
+
 function matchesAdminSearch(event, rawQuery) {
   const query = normalizeSearchValue(rawQuery);
   if (!query) return true;
@@ -874,11 +958,21 @@ async function saveEvent(payload) {
     const updatePayload = { ...payload };
     delete updatePayload.repeat_frequency;
     delete updatePayload.repeat_until;
+    const duplicateConflicts = findDuplicateConflicts([{ ...updatePayload, id: selectedId }], { excludeIds: [selectedId] });
+    if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+      setStatus(editStatus, duplicateConflictMessage(duplicateConflicts), "error");
+      return;
+    }
     query = client.from("events").update(updatePayload).eq("id", selectedId);
   } else {
     const recurringRows = buildRecurringRows(payload).map((row) => ({ ...row, status: row.status || "approved" }));
     if (!recurringRows.length) {
       setStatus(editStatus, "Invalid recurring settings. Check repeat frequency and end date.");
+      return;
+    }
+    const duplicateConflicts = findDuplicateConflicts(recurringRows);
+    if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+      setStatus(editStatus, duplicateConflictMessage(duplicateConflicts), "error");
       return;
     }
     query = client.from("events").insert(recurringRows);
@@ -1755,6 +1849,12 @@ async function batchInsertRows() {
 
   if (invalidIndexes.length) {
     setStatus(batchStatus, `Missing required fields on row(s): ${invalidIndexes.join(", ")}`, "error");
+    return;
+  }
+
+  const duplicateConflicts = findDuplicateConflicts(inserts);
+  if (duplicateConflicts.existingConflicts.length || duplicateConflicts.internalConflicts.length) {
+    setStatus(batchStatus, duplicateConflictMessage(duplicateConflicts), "error");
     return;
   }
 
