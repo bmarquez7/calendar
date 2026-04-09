@@ -1342,6 +1342,7 @@ function renderTable() {
     renderPoster(posterCell, entry.posterUrl, entry.title);
 
     const titleCell = document.createElement("td");
+    titleCell.className = "admin-title-cell";
     const titleWrap = document.createElement("div");
     titleWrap.className = "admin-event-title";
     const strong = document.createElement("strong");
@@ -1374,6 +1375,7 @@ function renderTable() {
     typeCell.textContent = entry.typeLabel || "";
 
     const actionsCell = document.createElement("td");
+    actionsCell.className = "admin-actions-cell";
     renderActions(actionsCell, entry);
 
     row.append(selectCell, posterCell, titleCell, statusCell, highlightedCell, dateCell, areaCell, typeCell, actionsCell);

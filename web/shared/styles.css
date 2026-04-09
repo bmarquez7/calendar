@@ -624,6 +624,23 @@ section {
   padding: 18px;
 }
 
+#event-modal {
+  overflow-y: auto;
+  padding: 0 16px 24px;
+}
+
+#event-modal .modal-content {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: min(760px, 100%);
+  max-width: 760px;
+  max-height: none;
+  overflow: visible;
+  margin: var(--modal-anchor-top, 8vh) auto 24px;
+}
+
 .modal-close {
   margin-left: auto;
   display: block;
@@ -725,6 +742,14 @@ section {
 .table th {
   background: var(--surface-2);
   font-weight: 600;
+}
+
+.admin-title-column,
+.admin-actions-column,
+.admin-title-cell,
+.admin-actions-cell {
+  width: 260px;
+  min-width: 260px;
 }
 
 .admin-bulk-bar {
@@ -1442,6 +1467,15 @@ section {
     transform: translateX(-50%);
     margin: 0;
     padding: 16px;
+  }
+
+  #event-modal {
+    padding: 0 12px 20px;
+  }
+
+  #event-modal .modal-content {
+    width: 100%;
+    margin: max(16px, min(var(--modal-anchor-top, 24px), 32px)) auto 20px;
   }
 
   .description-editor {
