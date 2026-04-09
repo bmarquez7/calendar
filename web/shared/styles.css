@@ -769,13 +769,17 @@ section {
 }
 
 .admin-table-child .admin-event-title {
-  padding-left: 18px;
+  padding-left: calc(18px * var(--admin-indent-level, 1));
 }
 
 .admin-table-child .admin-event-title strong::before {
   content: "↳";
   margin-right: 8px;
   color: var(--muted);
+}
+
+#admin-search {
+  min-width: 260px;
 }
 
 .admin-poster-cell {

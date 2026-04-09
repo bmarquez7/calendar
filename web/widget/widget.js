@@ -619,10 +619,10 @@ function featuredFallbackSort(a, b) {
 
 function getHighlightedEvents() {
   const selected = state.events
-    .filter((event) => event.is_highlighted && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
+    .filter((event) => event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
   const fallback = state.events
-    .filter((event) => !event.is_highlighted && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
+    .filter((event) => !event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort(featuredFallbackSort);
   return [...selected, ...fallback].slice(0, 10);
 }

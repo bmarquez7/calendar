@@ -15,6 +15,7 @@ const rolePill = document.getElementById("role-pill");
 
 const refreshButton = document.getElementById("refresh");
 const adminCount = document.getElementById("admin-count");
+const adminSearchInput = document.getElementById("admin-search");
 const adminTableBody = document.querySelector("#admin-table tbody");
 const adminSelectAll = document.getElementById("admin-select-all");
 const adminSelectedCount = document.getElementById("admin-selected-count");
@@ -96,6 +97,9 @@ let activeTextKey = "hero_title";
 const MAX_BATCH_ROWS = 50;
 const selectedEventIds = new Set();
 const expandedSeriesIds = new Set();
+const expandedTitleGroupIds = new Set();
+let adminSearchQuery = "";
+let currentVisibleEventIds = [];
 
 const ROLE_RANK = {
   moderator: 1,
@@ -185,12 +189,21 @@ function populateGroupedSelect(select, options, placeholder = "") {
   appendSelectOptions(select, options);
 }
 
-function canFeatureEventArea(area, status = "approved") {
-  return status === "approved" && isFeaturedEligibleArea(area);
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function canFeatureEventArea(area, status = "approved", featureBlocked = false) {
+  return !featureBlocked && status === "approved" && isFeaturedEligibleArea(area);
 }
 
 function syncEditHighlightAvailability() {
-  const canHighlight = canFeatureEventArea(editForm.area.value, editForm.status.value);
+  const featureBlocked = Boolean(editForm.feature_blocked?.checked);
+  const canHighlight = canFeatureEventArea(editForm.area.value, editForm.status.value, featureBlocked);
   editForm.is_highlighted.disabled = !canHighlight;
   if (!canHighlight) editForm.is_highlighted.checked = false;
   editForm.is_highlighted.closest(".toggle-field")?.classList.toggle("disabled", !canHighlight);
@@ -216,7 +229,7 @@ function uniqueById(events) {
 }
 
 function visibleEventIds() {
-  return currentEvents.map((event) => String(event.id)).filter(Boolean);
+  return currentVisibleEventIds.slice();
 }
 
 function reconcileSelection() {
@@ -259,6 +272,32 @@ function toggleSelectedEventIds(ids, checked) {
     else selectedEventIds.delete(key);
   });
   syncBulkSelectionUi();
+}
+
+function normalizeTitleGroupKey(title) {
+  return normalizeSearchValue(title);
+}
+
+function matchesAdminSearch(event, rawQuery) {
+  const query = normalizeSearchValue(rawQuery);
+  if (!query) return true;
+  const haystack = [
+    event.title_en,
+    event.title_es,
+    event.title_sq,
+    event.description_en,
+    event.description_es,
+    event.description_sq,
+    event.location_en,
+    event.location_es,
+    event.location_sq,
+    formatAreaLabel(event.area || ""),
+    event.event_type,
+    event.status
+  ]
+    .map((value) => normalizeSearchValue(value))
+    .join(" ");
+  return haystack.includes(query);
 }
 
 function statusLabel(status, count = 0) {
@@ -304,39 +343,92 @@ function summarizeSeries(events) {
     typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
     posterUrl: safeUrl(first.event_image_url),
     isHighlighted: sorted.some((event) => event.is_highlighted),
+    featureBlocked: sorted.every((event) => Boolean(event.feature_blocked)),
+    featureBlockedCount: sorted.filter((event) => event.feature_blocked).length,
     selectedIds: sorted.map((event) => String(event.id)),
-    canHighlight: sorted.every((event) => canFeatureEventArea(event.area, event.status)),
+    canHighlight: sorted.every((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked)),
     createdAt: Math.max(...sorted.map((event) => dateValue(event.created_at))),
     sortStatusRank: Math.min(...sorted.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
-    expanded: expandedSeriesIds.has(String(first.recurrence_group_id))
+    expanded: expandedSeriesIds.has(String(first.recurrence_group_id)),
+    titleGroupKey: normalizeTitleGroupKey(distinctTitles[0] || "")
+  };
+}
+
+function buildSingleEventEntry(event) {
+  return {
+    id: String(event.id),
+    kind: "event",
+    event,
+    events: [event],
+    title: event.title_en || "Untitled",
+    subtitle: "",
+    status: event.status || "",
+    statusParts: [event.status || ""],
+    dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
+    areaLabel: formatAreaLabel(event.area || ""),
+    typeLabel: event.event_type || "",
+    posterUrl: safeUrl(event.event_image_url),
+    isHighlighted: Boolean(event.is_highlighted),
+    featureBlocked: Boolean(event.feature_blocked),
+    featureBlockedCount: event.feature_blocked ? 1 : 0,
+    selectedIds: [String(event.id)],
+    canHighlight: canFeatureEventArea(event.area, event.status, event.feature_blocked),
+    createdAt: dateValue(event.created_at),
+    sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99,
+    titleGroupKey: normalizeTitleGroupKey(event.title_en || "")
+  };
+}
+
+function sortReviewEntries(entries) {
+  return entries.sort((a, b) => {
+    const statusDiff = a.sortStatusRank - b.sortStatusRank;
+    if (statusDiff !== 0) return statusDiff;
+    const createdDiff = b.createdAt - a.createdAt;
+    if (createdDiff !== 0) return createdDiff;
+    return dateValue(a.events?.[0]?.date_start) - dateValue(b.events?.[0]?.date_start);
+  });
+}
+
+function summarizeTitleGroup(entries) {
+  const allEvents = entries.flatMap((entry) => entry.events || []);
+  const sortedEvents = [...allEvents].sort((a, b) => dateValue(a.date_start) - dateValue(b.date_start));
+  const first = sortedEvents[0];
+  const last = sortedEvents[sortedEvents.length - 1];
+  const distinctAreas = [...new Set(allEvents.map((event) => formatAreaLabel(event.area || "")).filter(Boolean))];
+  const distinctTypes = [...new Set(allEvents.map((event) => String(event.event_type || "").trim()).filter(Boolean))];
+  const title = entries[0]?.title || "Untitled";
+  const titleKey = entries[0]?.titleGroupKey || normalizeTitleGroupKey(title);
+  return {
+    id: `title:${titleKey}`,
+    kind: "title_group",
+    title,
+    subtitle: `${entries.length} row${entries.length === 1 ? "" : "s"} • ${allEvents.length} event${allEvents.length === 1 ? "" : "s"}`,
+    status: entries.every((entry) => entry.status === entries[0].status) ? entries[0].status : "mixed",
+    statusParts: buildStatusBreakdown(allEvents),
+    dateLabel: `${first?.date_start ? new Date(first.date_start).toLocaleString() : "Unknown"}${last?.date_start && last.date_start !== first.date_start ? ` → ${new Date(last.date_start).toLocaleString()}` : ""}`,
+    areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
+    typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
+    posterUrl: entries.find((entry) => entry.posterUrl)?.posterUrl || "",
+    isHighlighted: allEvents.some((event) => event.is_highlighted),
+    featureBlocked: allEvents.every((event) => Boolean(event.feature_blocked)),
+    featureBlockedCount: allEvents.filter((event) => event.feature_blocked).length,
+    selectedIds: allEvents.map((event) => String(event.id)),
+    canHighlight: allEvents.every((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked)),
+    createdAt: Math.max(...allEvents.map((event) => dateValue(event.created_at))),
+    sortStatusRank: Math.min(...allEvents.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
+    expanded: expandedTitleGroupIds.has(titleKey),
+    titleGroupKey: titleKey,
+    childEntries: sortReviewEntries(entries)
   };
 }
 
 function buildReviewEntries(events) {
   const grouped = new Map();
-  const entries = [];
+  const baseEntries = [];
   events.forEach((event) => {
     const groupId = String(event.recurrence_group_id || "").trim();
     if (!groupId) {
-      entries.push({
-        id: String(event.id),
-        kind: "event",
-        event,
-        events: [event],
-        title: event.title_en || "Untitled",
-        subtitle: "",
-        status: event.status || "",
-        statusParts: [event.status || ""],
-        dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
-        areaLabel: formatAreaLabel(event.area || ""),
-        typeLabel: event.event_type || "",
-        posterUrl: safeUrl(event.event_image_url),
-        isHighlighted: Boolean(event.is_highlighted),
-        selectedIds: [String(event.id)],
-        canHighlight: canFeatureEventArea(event.area, event.status),
-        createdAt: dateValue(event.created_at),
-        sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99
-      });
+      baseEntries.push(buildSingleEventEntry(event));
       return;
     }
     const list = grouped.get(groupId) || [];
@@ -347,37 +439,30 @@ function buildReviewEntries(events) {
   grouped.forEach((groupEvents) => {
     if (groupEvents.length <= 1) {
       const [event] = groupEvents;
-      entries.push({
-        id: String(event.id),
-        kind: "event",
-        event,
-        events: [event],
-        title: event.title_en || "Untitled",
-        subtitle: "",
-        status: event.status || "",
-        statusParts: [event.status || ""],
-        dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
-        areaLabel: formatAreaLabel(event.area || ""),
-        typeLabel: event.event_type || "",
-        posterUrl: safeUrl(event.event_image_url),
-        isHighlighted: Boolean(event.is_highlighted),
-        selectedIds: [String(event.id)],
-        canHighlight: canFeatureEventArea(event.area, event.status),
-        createdAt: dateValue(event.created_at),
-        sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99
-      });
+      baseEntries.push(buildSingleEventEntry(event));
       return;
     }
-    entries.push(summarizeSeries(groupEvents));
+    baseEntries.push(summarizeSeries(groupEvents));
   });
 
-  return entries.sort((a, b) => {
-    const statusDiff = a.sortStatusRank - b.sortStatusRank;
-    if (statusDiff !== 0) return statusDiff;
-    const createdDiff = b.createdAt - a.createdAt;
-    if (createdDiff !== 0) return createdDiff;
-    return dateValue(a.events?.[0]?.date_start) - dateValue(b.events?.[0]?.date_start);
+  const titleGrouped = new Map();
+  baseEntries.forEach((entry) => {
+    const key = entry.titleGroupKey || normalizeTitleGroupKey(entry.title);
+    const list = titleGrouped.get(key) || [];
+    list.push(entry);
+    titleGrouped.set(key, list);
   });
+
+  const entries = [];
+  titleGrouped.forEach((titleEntries) => {
+    if (titleEntries.length > 1) {
+      entries.push(summarizeTitleGroup(titleEntries));
+    } else {
+      entries.push(titleEntries[0]);
+    }
+  });
+
+  return sortReviewEntries(entries);
 }
 
 function pageAllowed(pageId) {
@@ -557,8 +642,10 @@ function setAuthUi(session) {
     adminCount.textContent = "0 events";
     adminTableBody.innerHTML = "";
     currentEvents = [];
+    currentVisibleEventIds = [];
     selectedEventIds.clear();
     expandedSeriesIds.clear();
+    expandedTitleGroupIds.clear();
     syncBulkSelectionUi();
     if (adminBulkStatus) adminBulkStatus.style.display = "none";
     usersTableBody.innerHTML = "";
@@ -664,6 +751,7 @@ function fillEditForm(event) {
   editForm.repeat_until.value = "";
   editForm.status.value = event.status || "pending";
   editForm.is_highlighted.checked = Boolean(event.is_highlighted);
+  editForm.feature_blocked.checked = Boolean(event.feature_blocked);
   editForm.price_type.value = event.price_type || "";
   editForm.price_min.value = event.price_min || "";
   editForm.price_max.value = event.price_max || "";
@@ -682,6 +770,7 @@ function clearFormForNew() {
   editForm.status.value = "approved";
   editForm.area.value = "Skanderbeg Square";
   editForm.is_highlighted.checked = false;
+  editForm.feature_blocked.checked = false;
   editForm.price_type.value = "Paid";
   editForm.currency.value = "ALL";
   editForm.admin_response_note.value = "";
@@ -691,6 +780,7 @@ function clearFormForNew() {
 
 function toPayload(formData) {
   const status = formData.get("status") || "approved";
+  const featureBlocked = formData.get("feature_blocked") === "on";
   return {
     title_en: formData.get("title_en") || "",
     title_es: formData.get("title_es") || null,
@@ -712,7 +802,8 @@ function toPayload(formData) {
     repeat_frequency: formData.get("repeat_frequency") || "none",
     repeat_until: formData.get("repeat_until") || null,
     status,
-    is_highlighted: canFeatureEventArea(formData.get("area"), status) && formData.get("is_highlighted") === "on",
+    feature_blocked: featureBlocked,
+    is_highlighted: !featureBlocked && canFeatureEventArea(formData.get("area"), status, featureBlocked) && formData.get("is_highlighted") === "on",
     price_type: formData.get("price_type") || "Paid",
     price_min: formData.get("price_min") || null,
     price_max: formData.get("price_max") || null,
@@ -854,7 +945,7 @@ async function performBulkHighlight(ids, isHighlighted) {
   }
 
   const eligible = isHighlighted
-    ? events.filter((event) => canFeatureEventArea(event.area, event.status))
+    ? events.filter((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked))
     : events;
   if (!eligible.length) {
     setStatus(adminBulkStatus, "Only approved Tirana events can be highlighted.", "error");
@@ -870,6 +961,39 @@ async function performBulkHighlight(ids, isHighlighted) {
   setStatus(
     adminBulkStatus,
     `${isHighlighted ? "Highlighted" : "Unhighlighted"} ${eligible.length} event(s)${eligible.length !== events.length ? ` (${events.length - eligible.length} skipped)` : ""}.`,
+    "success"
+  );
+  await loadEvents();
+}
+
+async function performFeatureBlock(ids, featureBlocked) {
+  const events = uniqueById(
+    ids
+      .map((id) => currentEvents.find((event) => String(event.id) === String(id)))
+      .filter(Boolean)
+  );
+  if (!events.length) {
+    setStatus(adminBulkStatus, "Choose at least one event first.", "error");
+    return;
+  }
+  if (!hasRole("moderator")) {
+    setStatus(adminBulkStatus, "Moderator or higher required.", "error");
+    return;
+  }
+
+  const patch = featureBlocked
+    ? { feature_blocked: true, is_highlighted: false }
+    : { feature_blocked: false };
+
+  const { error } = await client.from("events").update(patch).in("id", events.map((event) => event.id));
+  if (error) {
+    setStatus(adminBulkStatus, error.message, "error");
+    return;
+  }
+
+  setStatus(
+    adminBulkStatus,
+    `${featureBlocked ? "Blocked" : "Re-enabled"} featuring for ${events.length} event(s).`,
     "success"
   );
   await loadEvents();
@@ -907,8 +1031,11 @@ async function performBulkDelete(ids) {
 async function toggleHighlight(id, isHighlighted) {
   if (!hasRole("moderator")) return;
   const targetEvent = currentEvents.find((event) => String(event.id) === String(id));
-  if (isHighlighted && targetEvent && !isFeaturedEligibleArea(targetEvent.area)) {
-    setStatus(editStatus, "Only Tirana events can be featured on the public calendar.", "error");
+  if (isHighlighted && targetEvent && !canFeatureEventArea(targetEvent.area, targetEvent.status, targetEvent.feature_blocked)) {
+    const reason = targetEvent.feature_blocked
+      ? "This event is blocked from being featured."
+      : "Only approved Tirana events can be featured on the public calendar.";
+    setStatus(editStatus, reason, "error");
     return;
   }
   const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).eq("id", id);
@@ -977,8 +1104,12 @@ async function deleteEvent(id) {
 
 function renderTable() {
   adminTableBody.innerHTML = "";
-  const entries = buildReviewEntries(currentEvents);
-  adminCount.textContent = `${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
+  const filteredEvents = currentEvents.filter((event) => matchesAdminSearch(event, adminSearchQuery));
+  const entries = buildReviewEntries(filteredEvents);
+  currentVisibleEventIds = [...new Set(filteredEvents.map((event) => String(event.id)).filter(Boolean))];
+  adminCount.textContent = adminSearchQuery
+    ? `${filteredEvents.length} of ${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`
+    : `${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
 
   function renderPoster(cell, posterUrl, alt) {
     if (posterUrl) {
@@ -1008,6 +1139,20 @@ function renderTable() {
     cell.appendChild(wrap);
   }
 
+  function renderFeatureState(cell, entry) {
+    const blockedCount = Number(entry.featureBlockedCount || 0);
+    if (blockedCount > 0) {
+      const blocked = document.createElement("span");
+      blocked.className = "status-pill";
+      blocked.textContent = blockedCount === (entry.selectedIds?.length || 0)
+        ? "Blocked"
+        : `${blockedCount} blocked`;
+      cell.appendChild(blocked);
+      return;
+    }
+    cell.innerHTML = entry.isHighlighted ? '<span class="status-pill">Yes</span>' : "—";
+  }
+
   function createActionButton(label, onClick, secondary = false) {
     const button = document.createElement("button");
     button.textContent = label;
@@ -1020,6 +1165,19 @@ function renderTable() {
     const actions = document.createElement("div");
     actions.className = "admin-actions";
     const targetIds = entry.selectedIds || [];
+    const bulkSuffix = entry.kind === "series" ? " all" : entry.kind === "title_group" ? " group" : "";
+
+    if (entry.kind === "title_group") {
+      actions.appendChild(createActionButton(
+        entry.expanded ? "Collapse" : "Expand",
+        () => {
+          if (entry.expanded) expandedTitleGroupIds.delete(entry.titleGroupKey);
+          else expandedTitleGroupIds.add(entry.titleGroupKey);
+          renderTable();
+        },
+        true
+      ));
+    }
 
     if (entry.kind === "series") {
       actions.appendChild(createActionButton(
@@ -1034,18 +1192,24 @@ function renderTable() {
     }
 
     if (hasRole("moderator")) {
-      actions.appendChild(createActionButton(entry.kind === "series" ? "Approve all" : "Approve", () => performBulkReview(targetIds, "approved")));
-      actions.appendChild(createActionButton(entry.kind === "series" ? "Pending all" : "Pending", () => performBulkReview(targetIds, "pending"), true));
-      actions.appendChild(createActionButton(entry.kind === "series" ? "Deny all" : "Deny", () => performBulkReview(targetIds, "denied"), true));
-      actions.appendChild(createActionButton(entry.kind === "series" ? "Needs info all" : "Needs info", () => performBulkReview(targetIds, "needs_info"), true));
+      actions.appendChild(createActionButton(`Approve${bulkSuffix}`, () => performBulkReview(targetIds, "approved")));
+      actions.appendChild(createActionButton(`Pending${bulkSuffix}`, () => performBulkReview(targetIds, "pending"), true));
+      actions.appendChild(createActionButton(`Deny${bulkSuffix}`, () => performBulkReview(targetIds, "denied"), true));
+      actions.appendChild(createActionButton(`Needs info${bulkSuffix}`, () => performBulkReview(targetIds, "needs_info"), true));
 
       if (entry.canHighlight || entry.isHighlighted) {
         actions.appendChild(createActionButton(
-          entry.isHighlighted ? (entry.kind === "series" ? "Unhighlight all" : "Unhighlight") : (entry.kind === "series" ? "Highlight all" : "Highlight"),
+          entry.isHighlighted ? `Unhighlight${bulkSuffix}` : `Highlight${bulkSuffix}`,
           () => performBulkHighlight(targetIds, !entry.isHighlighted),
           true
         ));
       }
+
+      actions.appendChild(createActionButton(
+        entry.featureBlocked ? "Allow featured" : "Block featured",
+        () => performFeatureBlock(targetIds, !entry.featureBlocked),
+        true
+      ));
     }
 
     if (entry.kind === "event" && hasRole("editor")) {
@@ -1062,9 +1226,12 @@ function renderTable() {
     cell.appendChild(actions);
   }
 
-  function renderEventRow(entry, { childOfSeries = false, occurrenceIndex = 0, seriesLength = 0 } = {}) {
+  function renderEventRow(entry, { childLevel = 0, occurrenceIndex = 0, seriesLength = 0 } = {}) {
     const row = document.createElement("tr");
-    if (childOfSeries) row.classList.add("admin-table-child");
+    if (childLevel > 0) {
+      row.classList.add("admin-table-child");
+      row.style.setProperty("--admin-indent-level", String(childLevel));
+    }
 
     const selectCell = document.createElement("td");
     selectCell.className = "admin-table-select-cell";
@@ -1086,7 +1253,7 @@ function renderTable() {
     const strong = document.createElement("strong");
     strong.textContent = entry.title || "Untitled";
     titleWrap.appendChild(strong);
-    const subtitle = childOfSeries
+    const subtitle = seriesLength
       ? `Occurrence ${occurrenceIndex + 1} of ${seriesLength}`
       : entry.subtitle;
     if (subtitle) {
@@ -1101,7 +1268,7 @@ function renderTable() {
     renderStatusCell(statusCell, entry);
 
     const highlightedCell = document.createElement("td");
-    highlightedCell.innerHTML = entry.isHighlighted ? '<span class="status-pill">Yes</span>' : "—";
+    renderFeatureState(highlightedCell, entry);
 
     const dateCell = document.createElement("td");
     dateCell.textContent = entry.dateLabel || "";
@@ -1119,30 +1286,24 @@ function renderTable() {
     adminTableBody.appendChild(row);
   }
 
-  entries.forEach((entry) => {
-    renderEventRow(entry);
+  function renderEntry(entry, childLevel = 0) {
+    renderEventRow(entry, { childLevel });
+    if (entry.kind === "title_group" && entry.expanded) {
+      entry.childEntries.forEach((childEntry) => renderEntry(childEntry, childLevel + 1));
+      return;
+    }
     if (entry.kind === "series" && entry.expanded) {
       entry.events.forEach((event, index) => {
-        renderEventRow({
-          id: String(event.id),
-          kind: "event",
-          event,
-          events: [event],
-          title: event.title_en || "Untitled",
-          subtitle: "",
-          status: event.status || "",
-          statusParts: [event.status || ""],
-          dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
-          areaLabel: formatAreaLabel(event.area || ""),
-          typeLabel: event.event_type || "",
-          posterUrl: safeUrl(event.event_image_url),
-          isHighlighted: Boolean(event.is_highlighted),
-          selectedIds: [String(event.id)],
-          canHighlight: canFeatureEventArea(event.area, event.status)
-        }, { childOfSeries: true, occurrenceIndex: index, seriesLength: entry.events.length });
+        renderEventRow(buildSingleEventEntry(event), {
+          childLevel: childLevel + 1,
+          occurrenceIndex: index,
+          seriesLength: entry.events.length
+        });
       });
     }
-  });
+  }
+
+  entries.forEach((entry) => renderEntry(entry));
 
   syncBulkSelectionUi();
 }
@@ -1170,6 +1331,10 @@ async function loadEvents() {
   const validGroupIds = new Set(currentEvents.map((event) => String(event.recurrence_group_id || "")).filter(Boolean));
   [...expandedSeriesIds].forEach((groupId) => {
     if (!validGroupIds.has(groupId)) expandedSeriesIds.delete(groupId);
+  });
+  const validTitleKeys = new Set(currentEvents.map((event) => normalizeTitleGroupKey(event.title_en || "")).filter(Boolean));
+  [...expandedTitleGroupIds].forEach((titleKey) => {
+    if (!validTitleKeys.has(titleKey)) expandedTitleGroupIds.delete(titleKey);
   });
   reconcileSelection();
   loginStatus.style.display = "none";
@@ -1611,6 +1776,10 @@ loginForm.addEventListener("submit", async (event) => {
 
 logoutButton.addEventListener("click", signOut);
 refreshButton.addEventListener("click", loadEvents);
+adminSearchInput?.addEventListener("input", (event) => {
+  adminSearchQuery = event.target.value || "";
+  renderTable();
+});
 adminSelectAll?.addEventListener("change", () => {
   toggleSelectedEventIds(visibleEventIds(), adminSelectAll.checked);
 });
@@ -1868,6 +2037,7 @@ if (batchRowsBody.querySelectorAll("tr").length === 0) {
 populateGroupedSelect(editForm.area, AREA_GROUPS, "Choose area");
 editForm.area.addEventListener("change", syncEditHighlightAvailability);
 editForm.status.addEventListener("change", syncEditHighlightAvailability);
+editForm.feature_blocked?.addEventListener("change", syncEditHighlightAvailability);
 syncEditHighlightAvailability();
 
 client.auth.onAuthStateChange(async (_evt, session) => {

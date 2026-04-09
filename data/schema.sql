@@ -27,6 +27,7 @@ create table if not exists public.events (
   event_image_url text,
   event_image_urls text[],
   recurrence_group_id uuid,
+  feature_blocked boolean not null default false,
   is_highlighted boolean not null default false,
   admin_response_note text,
   organizer_name text,
