@@ -78,11 +78,13 @@
             <button class="secondary" id="refresh">Refresh</button>
           </div>
           <div class="admin-bar admin-bulk-bar admin-queue-toolbar">
-            <label class="bulk-checkbox-label">
-              <input type="checkbox" id="admin-select-all" />
-              <span>Select all visible</span>
-            </label>
-            <span class="badge" id="admin-selected-count">0 selected</span>
+            <div class="admin-bulk-meta">
+              <label class="bulk-checkbox-label">
+                <input type="checkbox" id="admin-select-all" />
+                <span>Select all visible</span>
+              </label>
+              <span class="badge" id="admin-selected-count">0 selected</span>
+            </div>
             <div class="admin-bulk-actions">
               <button class="secondary" id="bulk-approve">Approve selected</button>
               <button class="secondary" id="bulk-pending">Mark pending</button>

@@ -748,8 +748,47 @@ section {
 .admin-actions-column,
 .admin-title-cell,
 .admin-actions-cell {
-  width: 260px;
-  min-width: 260px;
+  width: 185px;
+  min-width: 185px;
+}
+
+#admin-table {
+  table-layout: fixed;
+}
+
+#admin-table th:nth-child(1),
+#admin-table td:nth-child(1) {
+  width: 56px;
+}
+
+#admin-table th:nth-child(2),
+#admin-table td:nth-child(2) {
+  width: 88px;
+}
+
+#admin-table th:nth-child(4),
+#admin-table td:nth-child(4) {
+  width: 100px;
+}
+
+#admin-table th:nth-child(5),
+#admin-table td:nth-child(5) {
+  width: 105px;
+}
+
+#admin-table th:nth-child(6),
+#admin-table td:nth-child(6) {
+  width: 130px;
+}
+
+#admin-table th:nth-child(7),
+#admin-table td:nth-child(7) {
+  width: 130px;
+}
+
+#admin-table th:nth-child(8),
+#admin-table td:nth-child(8) {
+  width: 105px;
 }
 
 .admin-bulk-bar {
@@ -758,9 +797,10 @@ section {
 }
 
 .admin-bulk-bar.admin-queue-toolbar {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   overflow: visible;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .admin-queue-toolbar {
@@ -781,6 +821,14 @@ section {
   color: var(--text);
 }
 
+.admin-bulk-meta {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 220px;
+  flex: 0 0 220px;
+}
+
 .admin-table-select-cell {
   width: 52px;
 }
@@ -792,11 +840,16 @@ section {
 
 .admin-event-title strong {
   font-size: 15px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .admin-event-subtitle {
   color: var(--muted);
   font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .admin-status-summary {
@@ -808,7 +861,7 @@ section {
 
 .admin-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(88px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   align-items: stretch;
   width: 100%;
@@ -820,7 +873,7 @@ section {
   padding: 6px 8px;
   font-size: 12px;
   line-height: 1.1;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .admin-actions button {
@@ -839,10 +892,10 @@ section {
 
 .admin-bulk-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  flex: 1 1 540px;
-  min-width: min(100%, 540px);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .admin-bulk-actions button {
@@ -1381,6 +1434,11 @@ section {
   .admin-bulk-bar.admin-queue-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-bulk-meta {
+    min-width: 0;
+    flex: 0 0 auto;
   }
 
   .admin-actions,
