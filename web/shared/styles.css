@@ -725,6 +725,16 @@ section {
   align-items: center;
 }
 
+.admin-queue-toolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.admin-queue-toolbar > * {
+  flex: 0 0 auto;
+}
+
 .bulk-checkbox-label {
   display: inline-flex;
   align-items: center;
@@ -760,8 +770,25 @@ section {
 
 .admin-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.admin-actions button,
+.admin-queue-toolbar button,
+.admin-queue-toolbar .button-link {
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.admin-queue-toolbar .badge,
+.admin-queue-toolbar .bulk-checkbox-label {
+  white-space: nowrap;
 }
 
 .admin-table-child td {
@@ -779,7 +806,10 @@ section {
 }
 
 #admin-search {
-  min-width: 260px;
+  min-width: 220px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .admin-poster-cell {
@@ -1250,6 +1280,11 @@ section {
   .admin-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-queue-toolbar {
+    flex-direction: row;
+    align-items: center;
   }
 
   .hero-top {
