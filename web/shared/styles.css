@@ -607,12 +607,16 @@ section {
 }
 
 .modal-content {
-  position: relative;
+  position: absolute;
   z-index: 1001;
+  left: 50%;
+  top: var(--modal-anchor-top, 8vh);
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 32px));
   max-width: 760px;
-  max-height: 84vh;
+  max-height: min(84vh, calc(100vh - var(--modal-anchor-top, 8vh) - 24px));
   overflow: auto;
-  margin: 8vh auto;
+  margin: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1431,9 +1435,12 @@ section {
   }
 
   .modal-content {
+    left: 50%;
+    top: max(16px, min(var(--modal-anchor-top, 24px), 32px));
     width: calc(100% - 24px);
     max-height: 88vh;
-    margin: 24px auto;
+    transform: translateX(-50%);
+    margin: 0;
     padding: 16px;
   }
 

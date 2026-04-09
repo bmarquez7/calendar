@@ -126,6 +126,7 @@ const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
 const featuredColorCache = new Map();
 let featuredRotationTimer = null;
+let activeModalAnchor = null;
 
 state.weekStart = startOfWeek(new Date());
 
@@ -360,10 +361,30 @@ function linkifyText(value) {
   return html.replace(/\n/g, "<br />");
 }
 
-function openModal(content) {
+function syncModalPlacement() {
+  if (eventModal.classList.contains("hidden")) return;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const defaultTop = Math.max(20, Math.round(viewportHeight * 0.08));
+  let nextTop = defaultTop;
+
+  if (activeModalAnchor && window.innerWidth > 720) {
+    const rect = activeModalAnchor.getBoundingClientRect();
+    const preferredTop = Math.round(rect.top + 12);
+    const maxTop = Math.max(24, viewportHeight - 320);
+    nextTop = Math.min(Math.max(24, preferredTop), maxTop);
+  }
+
+  eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
+}
+
+function openModal(content, options = {}) {
   const html = typeof content === "string" ? content : content?.html || "";
+  if (options.anchorEl) {
+    activeModalAnchor = options.anchorEl;
+  }
   modalBody.innerHTML = html;
   eventModal.classList.remove("hidden");
+  syncModalPlacement();
   if (content && typeof content.onOpen === "function") {
     content.onOpen();
   }
@@ -372,6 +393,8 @@ function openModal(content) {
 function closeModal() {
   eventModal.classList.add("hidden");
   modalBody.innerHTML = "";
+  activeModalAnchor = null;
+  eventModal.style.removeProperty("--modal-anchor-top");
 }
 
 function buildModalGallery(images, title) {
@@ -463,8 +486,9 @@ function eventDetailHtml(event) {
 
 function openDayModal(date, events) {
   const dayLabel = date.toLocaleDateString(state.uiLang, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const calendarAnchor = calendarView.querySelector(".calendar") || calendarView;
   if (!events.length) {
-    openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3><p>No events for this day.</p>`);
+    openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3><p>No events for this day.</p>`, { anchorEl: calendarAnchor });
     return;
   }
 
@@ -481,7 +505,7 @@ function openDayModal(date, events) {
     )
     .join("");
 
-  openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3>${items}`);
+  openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3>${items}`, { anchorEl: calendarAnchor });
   modalBody.querySelectorAll(".modal-event").forEach((el) => {
     el.addEventListener("click", () => {
       const target = events.find((evt) => String(evt.id) === el.dataset.eventId);
@@ -881,7 +905,7 @@ function renderFeatured() {
       box.classList.add("featured-item-no-image");
       box.innerHTML = `<div class="featured-fallback"><span class="featured-fallback-title">${escapeHtml(eventTitle)}</span></div>`;
     }
-    box.addEventListener("click", () => openModal(eventDetailHtml(event)));
+    box.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: featuredBox }));
     featuredGrid.appendChild(box);
   });
 }
@@ -1159,6 +1183,8 @@ document.addEventListener("keydown", (event) => {
     closeModal();
   }
 });
+window.addEventListener("resize", syncModalPlacement);
+window.addEventListener("scroll", syncModalPlacement, { passive: true });
 
 syncUiCopy();
 renderFilters();
