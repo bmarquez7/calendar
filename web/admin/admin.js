@@ -63,6 +63,9 @@ const taskPages = Array.from(document.querySelectorAll(".task-page"));
 const taskButtons = Array.from(document.querySelectorAll("[data-open-page]"));
 const hubBackButtons = Array.from(document.querySelectorAll("[data-back-to-hub]"));
 const ACTIVE_TASK_STORAGE_KEY = "grow-albania-admin-active-page";
+const adminImageModal = document.getElementById("admin-image-modal");
+const adminImageClose = document.getElementById("admin-image-close");
+const adminImageBody = document.getElementById("admin-image-body");
 
 function readStoredTaskPage() {
   try {
@@ -133,6 +136,22 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function openAdminImageModal(imageUrl, title = "Event poster") {
+  const resolvedUrl = safeUrl(imageUrl);
+  if (!resolvedUrl || !adminImageModal || !adminImageBody) return;
+  adminImageBody.innerHTML = `
+    <h3 id="admin-image-title">${escapeHtml(title)}</h3>
+    <img class="admin-image-modal-poster" src="${resolvedUrl}" alt="${escapeHtml(title)}" loading="lazy" />
+  `;
+  adminImageModal.classList.remove("hidden");
+}
+
+function closeAdminImageModal() {
+  if (!adminImageModal || !adminImageBody) return;
+  adminImageModal.classList.add("hidden");
+  adminImageBody.innerHTML = "";
 }
 
 function supabaseProjectRef() {
@@ -1207,12 +1226,18 @@ function renderTable() {
 
   function renderPoster(cell, posterUrl, alt) {
     if (posterUrl) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "admin-poster-button";
+      button.setAttribute("aria-label", `Open poster for ${alt || "event"}`);
       const image = document.createElement("img");
       image.className = "admin-poster-thumb";
       image.src = posterUrl;
       image.alt = alt || "Event poster";
       image.loading = "lazy";
-      cell.appendChild(image);
+      button.appendChild(image);
+      button.addEventListener("click", () => openAdminImageModal(posterUrl, alt || "Event poster"));
+      cell.appendChild(button);
       return;
     }
     const emptyPoster = document.createElement("span");
@@ -1903,6 +1928,18 @@ taskButtons.forEach((button) => {
 });
 hubBackButtons.forEach((button) => {
   button.addEventListener("click", () => showTaskHub());
+});
+
+adminImageClose?.addEventListener("click", closeAdminImageModal);
+adminImageModal?.addEventListener("click", (event) => {
+  if (event.target?.dataset?.closeAdminImage === "true") {
+    closeAdminImageModal();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && adminImageModal && !adminImageModal.classList.contains("hidden")) {
+    closeAdminImageModal();
+  }
 });
 
 editForm.addEventListener("submit", async (event) => {
