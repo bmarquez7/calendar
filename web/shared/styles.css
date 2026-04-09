@@ -720,6 +720,64 @@ section {
   font-weight: 600;
 }
 
+.admin-bulk-bar {
+  margin: 12px 0;
+  align-items: center;
+}
+
+.bulk-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.admin-table-select-cell {
+  width: 52px;
+}
+
+.admin-event-title {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-event-title strong {
+  font-size: 15px;
+}
+
+.admin-event-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-status-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-table-child td {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.admin-table-child .admin-event-title {
+  padding-left: 18px;
+}
+
+.admin-table-child .admin-event-title strong::before {
+  content: "↳";
+  margin-right: 8px;
+  color: var(--muted);
+}
+
 .admin-poster-cell {
   width: 88px;
 }

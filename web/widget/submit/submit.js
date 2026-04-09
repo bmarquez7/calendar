@@ -97,6 +97,10 @@ function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function makeRecurrenceGroupId() {
+  return globalThis.crypto?.randomUUID?.() || null;
+}
+
 function customLanguageSort(label) {
   return String(label || "")
     .trim()
@@ -1011,7 +1015,14 @@ function buildRecurringEvents(card, basePayload, rowLabel) {
     return { error: `${rowLabel} did not generate any recurring dates. Check the repeat settings.` };
   }
 
-  return { events: occurrences.sort((a, b) => new Date(a.date_start) - new Date(b.date_start)) };
+  const sortedOccurrences = occurrences.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+  const recurrenceGroupId = sortedOccurrences.length > 1 ? makeRecurrenceGroupId() : null;
+  return {
+    events: sortedOccurrences.map((event) => ({
+      ...event,
+      recurrence_group_id: recurrenceGroupId
+    }))
+  };
 }
 
 function addRow() {

@@ -166,6 +166,7 @@ function normalizeSubmissionRow(row) {
     ticket_url: row?.ticket_url ? String(row.ticket_url).trim() : null,
     event_image_url: eventImageUrls[0] || null,
     event_image_urls: eventImageUrls.length ? eventImageUrls : null,
+    recurrence_group_id: row?.recurrence_group_id ? String(row.recurrence_group_id).trim() : null,
     organizer_name: row?.organizer_name ? String(row.organizer_name).trim() : null,
     organizer_email: row?.organizer_email ? String(row.organizer_email).trim() : null,
     submitter_name: row?.submitter_name ? String(row.submitter_name).trim() : null,
@@ -914,6 +915,54 @@ app.post("/v1/events/:eventId/review", async (request, reply) => {
     : buildEmailResult("skipped", [], reviewSubject(status), "Pending status does not send review emails.");
 
   return { ok: true, event: updated.data || current.data, email };
+});
+
+app.post("/v1/events/review-bulk", async (request, reply) => {
+  if (!canRole(request.role, "moderator")) return reply.code(403).send({ error: "Moderator+ required" });
+
+  const status = String(request.body?.status || "").trim();
+  const note = request.body?.note ? String(request.body.note).trim() : null;
+  const eventIds = [...new Set(toArray(request.body?.event_ids).map((value) => String(value || "").trim()).filter(Boolean))];
+
+  if (!["approved", "denied", "needs_info", "pending"].includes(status)) {
+    return reply.code(400).send({ error: "Invalid review status" });
+  }
+  if (!eventIds.length) {
+    return reply.code(400).send({ error: "At least one event id is required" });
+  }
+
+  const current = await serviceClient.from("events").select("*").in("id", eventIds);
+  if (current.error) return reply.code(500).send({ error: current.error.message });
+  const currentRows = current.data || [];
+  if (!currentRows.length) return reply.code(404).send({ error: "No matching events found" });
+
+  const patch = {
+    status,
+    admin_response_note: note
+  };
+  if (status !== "approved") patch.is_highlighted = false;
+
+  const updated = await serviceClient.from("events").update(patch).in("id", eventIds).select("*");
+  if (updated.error) return reply.code(500).send({ error: updated.error.message });
+  const updatedRows = updated.data || currentRows;
+
+  let email = buildEmailResult("skipped", [], reviewSubject(status), "Pending status does not send review emails.");
+  if (status !== "pending") {
+    const attempts = [];
+    for (const event of updatedRows) {
+      const result = await sendReviewEmails(event, status, note);
+      if (result?.attempts?.length) attempts.push(...result.attempts);
+      else if (result) attempts.push(result);
+    }
+    email = mergeEmailResults(attempts);
+  }
+
+  return {
+    ok: true,
+    updated_count: updatedRows.length,
+    events: updatedRows,
+    email
+  };
 });
 
 app.get("/v1/events", async (request, reply) => {

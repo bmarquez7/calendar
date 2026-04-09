@@ -16,6 +16,16 @@ const rolePill = document.getElementById("role-pill");
 const refreshButton = document.getElementById("refresh");
 const adminCount = document.getElementById("admin-count");
 const adminTableBody = document.querySelector("#admin-table tbody");
+const adminSelectAll = document.getElementById("admin-select-all");
+const adminSelectedCount = document.getElementById("admin-selected-count");
+const adminBulkStatus = document.getElementById("admin-bulk-status");
+const bulkApproveButton = document.getElementById("bulk-approve");
+const bulkPendingButton = document.getElementById("bulk-pending");
+const bulkDenyButton = document.getElementById("bulk-deny");
+const bulkNeedsInfoButton = document.getElementById("bulk-needs-info");
+const bulkHighlightButton = document.getElementById("bulk-highlight");
+const bulkUnhighlightButton = document.getElementById("bulk-unhighlight");
+const bulkDeleteButton = document.getElementById("bulk-delete");
 
 const editForm = document.getElementById("edit-form");
 const editStatus = document.getElementById("edit-status");
@@ -84,6 +94,8 @@ let settingsLoaded = false;
 let currentSettings = { id: 1 };
 let activeTextKey = "hero_title";
 const MAX_BATCH_ROWS = 50;
+const selectedEventIds = new Set();
+const expandedSeriesIds = new Set();
 
 const ROLE_RANK = {
   moderator: 1,
@@ -187,6 +199,185 @@ function syncEditHighlightAvailability() {
 function hasRole(minRole) {
   if (!currentRole) return false;
   return ROLE_RANK[currentRole] >= ROLE_RANK[minRole];
+}
+
+function makeRecurrenceGroupId() {
+  return globalThis.crypto?.randomUUID?.() || null;
+}
+
+function uniqueById(events) {
+  const seen = new Set();
+  return events.filter((event) => {
+    const key = String(event?.id || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function visibleEventIds() {
+  return currentEvents.map((event) => String(event.id)).filter(Boolean);
+}
+
+function reconcileSelection() {
+  const validIds = new Set(visibleEventIds());
+  [...selectedEventIds].forEach((id) => {
+    if (!validIds.has(id)) selectedEventIds.delete(id);
+  });
+}
+
+function syncBulkSelectionUi() {
+  reconcileSelection();
+  const visibleIds = visibleEventIds();
+  const selectedVisibleCount = visibleIds.filter((id) => selectedEventIds.has(id)).length;
+  if (adminSelectedCount) {
+    adminSelectedCount.textContent = `${selectedVisibleCount} selected`;
+  }
+  if (adminSelectAll) {
+    adminSelectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+    adminSelectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+  }
+  const disabled = selectedVisibleCount === 0;
+  [
+    bulkApproveButton,
+    bulkPendingButton,
+    bulkDenyButton,
+    bulkNeedsInfoButton,
+    bulkHighlightButton,
+    bulkUnhighlightButton,
+    bulkDeleteButton
+  ].forEach((button) => {
+    if (button) button.disabled = disabled;
+  });
+}
+
+function toggleSelectedEventIds(ids, checked) {
+  ids.forEach((id) => {
+    const key = String(id || "");
+    if (!key) return;
+    if (checked) selectedEventIds.add(key);
+    else selectedEventIds.delete(key);
+  });
+  syncBulkSelectionUi();
+}
+
+function statusLabel(status, count = 0) {
+  if (status === "mixed") return "mixed";
+  if (!count || count === 1) return status;
+  return `${status} (${count})`;
+}
+
+function buildStatusBreakdown(events) {
+  const counts = new Map();
+  events.forEach((event) => {
+    const status = event.status || "unknown";
+    counts.set(status, (counts.get(status) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .sort((a, b) => (EVENT_STATUS_RANK[a[0]] ?? 99) - (EVENT_STATUS_RANK[b[0]] ?? 99))
+    .map(([status, count]) => statusLabel(status, count));
+}
+
+function dateValue(value) {
+  const parsed = new Date(value || 0);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
+
+function summarizeSeries(events) {
+  const sorted = [...events].sort((a, b) => dateValue(a.date_start) - dateValue(b.date_start));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const distinctTitles = [...new Set(sorted.map((event) => String(event.title_en || "").trim()).filter(Boolean))];
+  const distinctAreas = [...new Set(sorted.map((event) => formatAreaLabel(event.area || "")).filter(Boolean))];
+  const distinctTypes = [...new Set(sorted.map((event) => String(event.event_type || "").trim()).filter(Boolean))];
+  const distinctStatuses = [...new Set(sorted.map((event) => String(event.status || "").trim()).filter(Boolean))];
+  return {
+    id: String(first.recurrence_group_id),
+    kind: "series",
+    events: sorted,
+    title: distinctTitles.length === 1 ? distinctTitles[0] : `${distinctTitles[0] || "Recurring event"} +${distinctTitles.length - 1}`,
+    subtitle: `${sorted.length} occurrences • ${buildStatusBreakdown(sorted).join(" • ")}`,
+    status: distinctStatuses.length === 1 ? distinctStatuses[0] : "mixed",
+    statusParts: buildStatusBreakdown(sorted),
+    dateLabel: `${first.date_start ? new Date(first.date_start).toLocaleString() : "Unknown"}${last?.date_start && last.date_start !== first.date_start ? ` → ${new Date(last.date_start).toLocaleString()}` : ""}`,
+    areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
+    typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
+    posterUrl: safeUrl(first.event_image_url),
+    isHighlighted: sorted.some((event) => event.is_highlighted),
+    selectedIds: sorted.map((event) => String(event.id)),
+    canHighlight: sorted.every((event) => canFeatureEventArea(event.area, event.status)),
+    createdAt: Math.max(...sorted.map((event) => dateValue(event.created_at))),
+    sortStatusRank: Math.min(...sorted.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
+    expanded: expandedSeriesIds.has(String(first.recurrence_group_id))
+  };
+}
+
+function buildReviewEntries(events) {
+  const grouped = new Map();
+  const entries = [];
+  events.forEach((event) => {
+    const groupId = String(event.recurrence_group_id || "").trim();
+    if (!groupId) {
+      entries.push({
+        id: String(event.id),
+        kind: "event",
+        event,
+        events: [event],
+        title: event.title_en || "Untitled",
+        subtitle: "",
+        status: event.status || "",
+        statusParts: [event.status || ""],
+        dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
+        areaLabel: formatAreaLabel(event.area || ""),
+        typeLabel: event.event_type || "",
+        posterUrl: safeUrl(event.event_image_url),
+        isHighlighted: Boolean(event.is_highlighted),
+        selectedIds: [String(event.id)],
+        canHighlight: canFeatureEventArea(event.area, event.status),
+        createdAt: dateValue(event.created_at),
+        sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99
+      });
+      return;
+    }
+    const list = grouped.get(groupId) || [];
+    list.push(event);
+    grouped.set(groupId, list);
+  });
+
+  grouped.forEach((groupEvents) => {
+    if (groupEvents.length <= 1) {
+      const [event] = groupEvents;
+      entries.push({
+        id: String(event.id),
+        kind: "event",
+        event,
+        events: [event],
+        title: event.title_en || "Untitled",
+        subtitle: "",
+        status: event.status || "",
+        statusParts: [event.status || ""],
+        dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
+        areaLabel: formatAreaLabel(event.area || ""),
+        typeLabel: event.event_type || "",
+        posterUrl: safeUrl(event.event_image_url),
+        isHighlighted: Boolean(event.is_highlighted),
+        selectedIds: [String(event.id)],
+        canHighlight: canFeatureEventArea(event.area, event.status),
+        createdAt: dateValue(event.created_at),
+        sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99
+      });
+      return;
+    }
+    entries.push(summarizeSeries(groupEvents));
+  });
+
+  return entries.sort((a, b) => {
+    const statusDiff = a.sortStatusRank - b.sortStatusRank;
+    if (statusDiff !== 0) return statusDiff;
+    const createdDiff = b.createdAt - a.createdAt;
+    if (createdDiff !== 0) return createdDiff;
+    return dateValue(a.events?.[0]?.date_start) - dateValue(b.events?.[0]?.date_start);
+  });
 }
 
 function pageAllowed(pageId) {
@@ -365,6 +556,11 @@ function setAuthUi(session) {
   if (!isAuthed) {
     adminCount.textContent = "0 events";
     adminTableBody.innerHTML = "";
+    currentEvents = [];
+    selectedEventIds.clear();
+    expandedSeriesIds.clear();
+    syncBulkSelectionUi();
+    if (adminBulkStatus) adminBulkStatus.style.display = "none";
     usersTableBody.innerHTML = "";
     if (accessRequestsTableBody) accessRequestsTableBody.innerHTML = "";
     selectedId = null;
@@ -565,7 +761,11 @@ function buildRecurringRows(payload) {
     currentStart = addByFrequency(currentStart, frequency);
     guard += 1;
   }
-  return rows;
+  const recurrenceGroupId = rows.length > 1 ? makeRecurrenceGroupId() : null;
+  return rows.map((row) => ({
+    ...row,
+    recurrence_group_id: recurrenceGroupId
+  }));
 }
 
 async function saveEvent(payload) {
@@ -604,6 +804,104 @@ async function saveEvent(payload) {
 
 async function updateStatus(id, status) {
   await sendReviewDecision(id, status);
+}
+
+async function performBulkReview(ids, status) {
+  const eventIds = uniqueById(
+    ids
+      .map((id) => currentEvents.find((event) => String(event.id) === String(id)))
+      .filter(Boolean)
+  ).map((event) => String(event.id));
+  if (!eventIds.length) {
+    setStatus(adminBulkStatus, "Select at least one event first.", "error");
+    return;
+  }
+  if (!hasRole("moderator")) {
+    setStatus(adminBulkStatus, "Moderator or higher required.", "error");
+    return;
+  }
+
+  try {
+    const result = await api("/v1/events/review-bulk", {
+      method: "POST",
+      body: JSON.stringify({ event_ids: eventIds, status })
+    });
+    setStatus(
+      adminBulkStatus,
+      `Updated ${result?.updated_count || eventIds.length} event(s) to ${status}. | ${formatEmailResult(result?.email)}`,
+      "success"
+    );
+    eventIds.forEach((id) => selectedEventIds.delete(String(id)));
+    await loadEvents();
+  } catch (error) {
+    setStatus(adminBulkStatus, error.message, "error");
+  }
+}
+
+async function performBulkHighlight(ids, isHighlighted) {
+  const events = uniqueById(
+    ids
+      .map((id) => currentEvents.find((event) => String(event.id) === String(id)))
+      .filter(Boolean)
+  );
+  if (!events.length) {
+    setStatus(adminBulkStatus, "Select at least one event first.", "error");
+    return;
+  }
+  if (!hasRole("moderator")) {
+    setStatus(adminBulkStatus, "Moderator or higher required.", "error");
+    return;
+  }
+
+  const eligible = isHighlighted
+    ? events.filter((event) => canFeatureEventArea(event.area, event.status))
+    : events;
+  if (!eligible.length) {
+    setStatus(adminBulkStatus, "Only approved Tirana events can be highlighted.", "error");
+    return;
+  }
+
+  const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).in("id", eligible.map((event) => event.id));
+  if (error) {
+    setStatus(adminBulkStatus, error.message, "error");
+    return;
+  }
+
+  setStatus(
+    adminBulkStatus,
+    `${isHighlighted ? "Highlighted" : "Unhighlighted"} ${eligible.length} event(s)${eligible.length !== events.length ? ` (${events.length - eligible.length} skipped)` : ""}.`,
+    "success"
+  );
+  await loadEvents();
+}
+
+async function performBulkDelete(ids) {
+  const eventIds = uniqueById(
+    ids
+      .map((id) => currentEvents.find((event) => String(event.id) === String(id)))
+      .filter(Boolean)
+  ).map((event) => String(event.id));
+  if (!eventIds.length) {
+    setStatus(adminBulkStatus, "Select at least one event first.", "error");
+    return;
+  }
+  if (!hasRole("editor")) {
+    setStatus(adminBulkStatus, "Editor or owner required.", "error");
+    return;
+  }
+  if (!window.confirm(`Delete ${eventIds.length} selected event${eventIds.length === 1 ? "" : "s"}? This cannot be undone.`)) {
+    return;
+  }
+
+  const { error } = await client.from("events").delete().in("id", eventIds);
+  if (error) {
+    setStatus(adminBulkStatus, error.message, "error");
+    return;
+  }
+
+  eventIds.forEach((id) => selectedEventIds.delete(String(id)));
+  setStatus(adminBulkStatus, `Deleted ${eventIds.length} event(s).`, "success");
+  await loadEvents();
 }
 
 async function toggleHighlight(id, isHighlighted) {
@@ -672,94 +970,181 @@ async function deleteEvent(id) {
     setStatus(editStatus, error.message, "error");
     return;
   }
+  selectedEventIds.delete(String(id));
   setStatus(editStatus, "Event deleted.", "success");
   await loadEvents();
 }
 
 function renderTable() {
   adminTableBody.innerHTML = "";
-  adminCount.textContent = `${currentEvents.length} events`;
+  const entries = buildReviewEntries(currentEvents);
+  adminCount.textContent = `${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
 
-  currentEvents.forEach((event) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td class="admin-poster-cell"></td>
-      <td>${escapeHtml(event.title_en || "Untitled")}</td>
-      <td><span class="status-pill">${escapeHtml(event.status || "")}</span></td>
-      <td>${event.is_highlighted ? '<span class="status-pill">Yes</span>' : "—"}</td>
-      <td>${escapeHtml(event.date_start ? new Date(event.date_start).toLocaleString() : "")}</td>
-      <td>${escapeHtml(formatAreaLabel(event.area || ""))}</td>
-      <td>${escapeHtml(event.event_type || "")}</td>
-      <td></td>
-    `;
-
-    const posterCell = row.querySelector("td:first-child");
-    const actionsCell = row.querySelector("td:last-child");
-    const posterUrl = safeUrl(event.event_image_url);
+  function renderPoster(cell, posterUrl, alt) {
     if (posterUrl) {
       const image = document.createElement("img");
       image.className = "admin-poster-thumb";
       image.src = posterUrl;
-      image.alt = event.title_en || "Event poster";
+      image.alt = alt || "Event poster";
       image.loading = "lazy";
-      posterCell.appendChild(image);
-    } else {
-      const emptyPoster = document.createElement("span");
-      emptyPoster.className = "admin-poster-empty";
-      emptyPoster.textContent = "No image";
-      posterCell.appendChild(emptyPoster);
+      cell.appendChild(image);
+      return;
+    }
+    const emptyPoster = document.createElement("span");
+    emptyPoster.className = "admin-poster-empty";
+    emptyPoster.textContent = "No image";
+    cell.appendChild(emptyPoster);
+  }
+
+  function renderStatusCell(cell, entry) {
+    const wrap = document.createElement("div");
+    wrap.className = "admin-status-summary";
+    (entry.statusParts || [entry.status]).forEach((statusPart) => {
+      const pill = document.createElement("span");
+      pill.className = "status-pill";
+      pill.textContent = statusPart;
+      wrap.appendChild(pill);
+    });
+    cell.appendChild(wrap);
+  }
+
+  function createActionButton(label, onClick, secondary = false) {
+    const button = document.createElement("button");
+    button.textContent = label;
+    if (secondary) button.className = "secondary";
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  function renderActions(cell, entry) {
+    const actions = document.createElement("div");
+    actions.className = "admin-actions";
+    const targetIds = entry.selectedIds || [];
+
+    if (entry.kind === "series") {
+      actions.appendChild(createActionButton(
+        entry.expanded ? "Regroup" : "Break apart",
+        () => {
+          if (entry.expanded) expandedSeriesIds.delete(entry.id);
+          else expandedSeriesIds.add(entry.id);
+          renderTable();
+        },
+        true
+      ));
     }
 
     if (hasRole("moderator")) {
-      const approve = document.createElement("button");
-      approve.textContent = "Approve";
-      approve.addEventListener("click", () => updateStatus(event.id, "approved"));
+      actions.appendChild(createActionButton(entry.kind === "series" ? "Approve all" : "Approve", () => performBulkReview(targetIds, "approved")));
+      actions.appendChild(createActionButton(entry.kind === "series" ? "Pending all" : "Pending", () => performBulkReview(targetIds, "pending"), true));
+      actions.appendChild(createActionButton(entry.kind === "series" ? "Deny all" : "Deny", () => performBulkReview(targetIds, "denied"), true));
+      actions.appendChild(createActionButton(entry.kind === "series" ? "Needs info all" : "Needs info", () => performBulkReview(targetIds, "needs_info"), true));
 
-      const hold = document.createElement("button");
-      hold.textContent = "Pending";
-      hold.className = "secondary";
-      hold.addEventListener("click", () => updateStatus(event.id, "pending"));
-
-      const deny = document.createElement("button");
-      deny.textContent = "Deny";
-      deny.className = "secondary";
-      deny.addEventListener("click", () => updateStatus(event.id, "denied"));
-
-      const needsInfo = document.createElement("button");
-      needsInfo.textContent = "Needs info";
-      needsInfo.className = "secondary";
-      needsInfo.addEventListener("click", () => updateStatus(event.id, "needs_info"));
-
-      actionsCell.append(approve, hold, deny, needsInfo);
-
-      if (canFeatureEventArea(event.area, event.status) || event.is_highlighted) {
-        const highlight = document.createElement("button");
-        highlight.textContent = event.is_highlighted ? "Unhighlight" : "Highlight";
-        highlight.className = "secondary";
-        highlight.addEventListener("click", () => toggleHighlight(event.id, !event.is_highlighted));
-        actionsCell.appendChild(highlight);
+      if (entry.canHighlight || entry.isHighlighted) {
+        actions.appendChild(createActionButton(
+          entry.isHighlighted ? (entry.kind === "series" ? "Unhighlight all" : "Unhighlight") : (entry.kind === "series" ? "Highlight all" : "Highlight"),
+          () => performBulkHighlight(targetIds, !entry.isHighlighted),
+          true
+        ));
       }
     }
 
-    if (hasRole("editor")) {
-      const edit = document.createElement("button");
-      edit.textContent = "Edit";
-      edit.className = "secondary";
-      edit.addEventListener("click", () => {
-        fillEditForm(event);
+    if (entry.kind === "event" && hasRole("editor")) {
+      actions.appendChild(createActionButton("Edit", () => {
+        fillEditForm(entry.event);
         showTaskPage("event-editor-page");
-      });
-
-      const remove = document.createElement("button");
-      remove.textContent = "Delete";
-      remove.className = "secondary";
-      remove.addEventListener("click", () => deleteEvent(event.id));
-
-      actionsCell.append(edit, remove);
+      }, true));
     }
 
+    if (hasRole("editor")) {
+      actions.appendChild(createActionButton(entry.kind === "series" ? "Delete series" : "Delete", () => performBulkDelete(targetIds), true));
+    }
+
+    cell.appendChild(actions);
+  }
+
+  function renderEventRow(entry, { childOfSeries = false, occurrenceIndex = 0, seriesLength = 0 } = {}) {
+    const row = document.createElement("tr");
+    if (childOfSeries) row.classList.add("admin-table-child");
+
+    const selectCell = document.createElement("td");
+    selectCell.className = "admin-table-select-cell";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    const selectedCount = (entry.selectedIds || []).filter((id) => selectedEventIds.has(String(id))).length;
+    checkbox.checked = entry.selectedIds.length > 0 && selectedCount === entry.selectedIds.length;
+    checkbox.indeterminate = selectedCount > 0 && selectedCount < entry.selectedIds.length;
+    checkbox.addEventListener("change", () => toggleSelectedEventIds(entry.selectedIds, checkbox.checked));
+    selectCell.appendChild(checkbox);
+
+    const posterCell = document.createElement("td");
+    posterCell.className = "admin-poster-cell";
+    renderPoster(posterCell, entry.posterUrl, entry.title);
+
+    const titleCell = document.createElement("td");
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "admin-event-title";
+    const strong = document.createElement("strong");
+    strong.textContent = entry.title || "Untitled";
+    titleWrap.appendChild(strong);
+    const subtitle = childOfSeries
+      ? `Occurrence ${occurrenceIndex + 1} of ${seriesLength}`
+      : entry.subtitle;
+    if (subtitle) {
+      const sub = document.createElement("span");
+      sub.className = "admin-event-subtitle";
+      sub.textContent = subtitle;
+      titleWrap.appendChild(sub);
+    }
+    titleCell.appendChild(titleWrap);
+
+    const statusCell = document.createElement("td");
+    renderStatusCell(statusCell, entry);
+
+    const highlightedCell = document.createElement("td");
+    highlightedCell.innerHTML = entry.isHighlighted ? '<span class="status-pill">Yes</span>' : "—";
+
+    const dateCell = document.createElement("td");
+    dateCell.textContent = entry.dateLabel || "";
+
+    const areaCell = document.createElement("td");
+    areaCell.textContent = entry.areaLabel || "";
+
+    const typeCell = document.createElement("td");
+    typeCell.textContent = entry.typeLabel || "";
+
+    const actionsCell = document.createElement("td");
+    renderActions(actionsCell, entry);
+
+    row.append(selectCell, posterCell, titleCell, statusCell, highlightedCell, dateCell, areaCell, typeCell, actionsCell);
     adminTableBody.appendChild(row);
+  }
+
+  entries.forEach((entry) => {
+    renderEventRow(entry);
+    if (entry.kind === "series" && entry.expanded) {
+      entry.events.forEach((event, index) => {
+        renderEventRow({
+          id: String(event.id),
+          kind: "event",
+          event,
+          events: [event],
+          title: event.title_en || "Untitled",
+          subtitle: "",
+          status: event.status || "",
+          statusParts: [event.status || ""],
+          dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
+          areaLabel: formatAreaLabel(event.area || ""),
+          typeLabel: event.event_type || "",
+          posterUrl: safeUrl(event.event_image_url),
+          isHighlighted: Boolean(event.is_highlighted),
+          selectedIds: [String(event.id)],
+          canHighlight: canFeatureEventArea(event.area, event.status)
+        }, { childOfSeries: true, occurrenceIndex: index, seriesLength: entry.events.length });
+      });
+    }
   });
+
+  syncBulkSelectionUi();
 }
 
 async function loadEvents() {
@@ -782,6 +1167,11 @@ async function loadEvents() {
     if (createdDiff !== 0) return createdDiff;
     return new Date(a.date_start || 0) - new Date(b.date_start || 0);
   });
+  const validGroupIds = new Set(currentEvents.map((event) => String(event.recurrence_group_id || "")).filter(Boolean));
+  [...expandedSeriesIds].forEach((groupId) => {
+    if (!validGroupIds.has(groupId)) expandedSeriesIds.delete(groupId);
+  });
+  reconcileSelection();
   loginStatus.style.display = "none";
   renderTable();
 }
@@ -1221,6 +1611,16 @@ loginForm.addEventListener("submit", async (event) => {
 
 logoutButton.addEventListener("click", signOut);
 refreshButton.addEventListener("click", loadEvents);
+adminSelectAll?.addEventListener("change", () => {
+  toggleSelectedEventIds(visibleEventIds(), adminSelectAll.checked);
+});
+bulkApproveButton?.addEventListener("click", () => performBulkReview([...selectedEventIds], "approved"));
+bulkPendingButton?.addEventListener("click", () => performBulkReview([...selectedEventIds], "pending"));
+bulkDenyButton?.addEventListener("click", () => performBulkReview([...selectedEventIds], "denied"));
+bulkNeedsInfoButton?.addEventListener("click", () => performBulkReview([...selectedEventIds], "needs_info"));
+bulkHighlightButton?.addEventListener("click", () => performBulkHighlight([...selectedEventIds], true));
+bulkUnhighlightButton?.addEventListener("click", () => performBulkHighlight([...selectedEventIds], false));
+bulkDeleteButton?.addEventListener("click", () => performBulkDelete([...selectedEventIds]));
 taskButtons.forEach((button) => {
   button.addEventListener("click", async () => {
     const pageId = button.dataset.openPage || "";

@@ -26,6 +26,7 @@ create table if not exists public.events (
   ticket_url text,
   event_image_url text,
   event_image_urls text[],
+  recurrence_group_id uuid,
   is_highlighted boolean not null default false,
   admin_response_note text,
   organizer_name text,
@@ -59,6 +60,9 @@ on public.events ((coalesce(date_end, date_start)));
 
 create index if not exists events_highlight_idx
 on public.events (is_highlighted, created_at desc);
+
+create index if not exists events_recurrence_group_idx
+on public.events (recurrence_group_id, date_start);
 
 create table if not exists public.admin_user_roles (
   user_id uuid primary key,

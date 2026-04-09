@@ -71,13 +71,30 @@
           <div class="admin-bar" style="margin-bottom: 12px;">
             <button class="secondary" data-back-to-hub>Back to tasks</button>
           </div>
+          <p class="small">Recurring submissions are grouped together by default. Use <strong>Break apart</strong> on a series if you want to review or reject a single occurrence.</p>
           <div class="admin-bar">
             <span class="badge" id="admin-count">0 events</span>
             <button class="secondary" id="refresh">Refresh</button>
           </div>
+          <div class="admin-bar admin-bulk-bar">
+            <label class="bulk-checkbox-label">
+              <input type="checkbox" id="admin-select-all" />
+              <span>Select all visible</span>
+            </label>
+            <span class="badge" id="admin-selected-count">0 selected</span>
+            <button class="secondary" id="bulk-approve">Approve selected</button>
+            <button class="secondary" id="bulk-pending">Mark pending</button>
+            <button class="secondary" id="bulk-deny">Deny selected</button>
+            <button class="secondary" id="bulk-needs-info">Needs info selected</button>
+            <button class="secondary" id="bulk-highlight">Highlight selected</button>
+            <button class="secondary" id="bulk-unhighlight">Unhighlight selected</button>
+            <button class="secondary" id="bulk-delete">Delete selected</button>
+          </div>
+          <div class="notice" id="admin-bulk-status" style="display:none;"></div>
           <table class="table" id="admin-table">
             <thead>
               <tr>
+                <th>Select</th>
                 <th>Poster</th>
                 <th>Title</th>
                 <th>Status</th>
