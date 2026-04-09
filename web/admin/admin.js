@@ -138,14 +138,61 @@ function safeUrl(value) {
   }
 }
 
-function openAdminImageModal(imageUrl, title = "Event poster") {
-  const resolvedUrl = safeUrl(imageUrl);
-  if (!resolvedUrl || !adminImageModal || !adminImageBody) return;
+function getEventImages(event) {
+  const urls = [];
+  [event?.event_image_url, ...(Array.isArray(event?.event_image_urls) ? event.event_image_urls : [])].forEach((value) => {
+    const safe = safeUrl(value);
+    if (safe && !urls.includes(safe)) urls.push(safe);
+  });
+  return urls;
+}
+
+function openAdminImageModal(images, title = "Event poster", dateLabel = "") {
+  const gallery = (Array.isArray(images) ? images : [images]).map((value) => safeUrl(value)).filter(Boolean);
+  if (!gallery.length || !adminImageModal || !adminImageBody) return;
+  const controls = gallery.length > 1
+    ? `
+      <button type="button" class="modal-gallery-arrow modal-gallery-arrow-prev" data-admin-gallery-prev aria-label="Previous image">←</button>
+      <button type="button" class="modal-gallery-arrow modal-gallery-arrow-next" data-admin-gallery-next aria-label="Next image">→</button>
+      <div class="modal-gallery-counter" data-admin-gallery-counter>1 / ${gallery.length}</div>
+    `
+    : "";
   adminImageBody.innerHTML = `
     <h3 id="admin-image-title">${escapeHtml(title)}</h3>
-    <img class="admin-image-modal-poster" src="${resolvedUrl}" alt="${escapeHtml(title)}" loading="lazy" />
+    ${dateLabel ? `<p class="admin-image-modal-meta">${escapeHtml(dateLabel)}</p>` : ""}
+    <div class="modal-gallery">
+      <div class="modal-gallery-frame">
+        <img class="admin-image-modal-poster modal-gallery-image" data-admin-gallery-image src="${gallery[0]}" alt="${escapeHtml(title)}" loading="lazy" />
+        ${controls}
+      </div>
+    </div>
   `;
   adminImageModal.classList.remove("hidden");
+
+  if (gallery.length > 1) {
+    const image = adminImageBody.querySelector("[data-admin-gallery-image]");
+    const counter = adminImageBody.querySelector("[data-admin-gallery-counter]");
+    const prev = adminImageBody.querySelector("[data-admin-gallery-prev]");
+    const next = adminImageBody.querySelector("[data-admin-gallery-next]");
+    if (image && counter && prev && next) {
+      let index = 0;
+      const render = () => {
+        image.src = gallery[index];
+        image.alt = `${title} image ${index + 1} of ${gallery.length}`;
+        counter.textContent = `${index + 1} / ${gallery.length}`;
+      };
+      prev.addEventListener("click", (event) => {
+        event.stopPropagation();
+        index = (index - 1 + gallery.length) % gallery.length;
+        render();
+      });
+      next.addEventListener("click", (event) => {
+        event.stopPropagation();
+        index = (index + 1) % gallery.length;
+        render();
+      });
+    }
+  }
 }
 
 function closeAdminImageModal() {
@@ -445,6 +492,7 @@ function summarizeSeries(events) {
     areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
     typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
     posterUrl: safeUrl(first.event_image_url),
+    imageUrls: sorted.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: sorted.some((event) => event.is_highlighted),
     featureBlocked: sorted.every((event) => Boolean(event.feature_blocked)),
     featureBlockedCount: sorted.filter((event) => event.feature_blocked).length,
@@ -471,6 +519,7 @@ function buildSingleEventEntry(event) {
     areaLabel: formatAreaLabel(event.area || ""),
     typeLabel: event.event_type || "",
     posterUrl: safeUrl(event.event_image_url),
+    imageUrls: getEventImages(event),
     isHighlighted: Boolean(event.is_highlighted),
     featureBlocked: Boolean(event.feature_blocked),
     featureBlockedCount: event.feature_blocked ? 1 : 0,
@@ -512,6 +561,7 @@ function summarizeTitleGroup(entries) {
     areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
     typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
     posterUrl: entries.find((entry) => entry.posterUrl)?.posterUrl || "",
+    imageUrls: allEvents.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: allEvents.some((event) => event.is_highlighted),
     featureBlocked: allEvents.every((event) => Boolean(event.feature_blocked)),
     featureBlockedCount: allEvents.filter((event) => event.feature_blocked).length,
@@ -1224,19 +1274,19 @@ function renderTable() {
     ? `${filteredEvents.length} of ${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`
     : `${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
 
-  function renderPoster(cell, posterUrl, alt) {
-    if (posterUrl) {
+  function renderPoster(cell, entry) {
+    if (entry.posterUrl) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "admin-poster-button";
-      button.setAttribute("aria-label", `Open poster for ${alt || "event"}`);
+      button.setAttribute("aria-label", `Open poster for ${entry.title || "event"}`);
       const image = document.createElement("img");
       image.className = "admin-poster-thumb";
-      image.src = posterUrl;
-      image.alt = alt || "Event poster";
+      image.src = entry.posterUrl;
+      image.alt = entry.title || "Event poster";
       image.loading = "lazy";
       button.appendChild(image);
-      button.addEventListener("click", () => openAdminImageModal(posterUrl, alt || "Event poster"));
+      button.addEventListener("click", () => openAdminImageModal(entry.imageUrls || [entry.posterUrl], entry.title || "Event poster", entry.dateLabel || ""));
       cell.appendChild(button);
       return;
     }
@@ -1364,7 +1414,7 @@ function renderTable() {
 
     const posterCell = document.createElement("td");
     posterCell.className = "admin-poster-cell";
-    renderPoster(posterCell, entry.posterUrl, entry.title);
+    renderPoster(posterCell, entry);
 
     const titleCell = document.createElement("td");
     titleCell.className = "admin-title-cell";

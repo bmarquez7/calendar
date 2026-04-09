@@ -207,6 +207,7 @@ body {
   -webkit-appearance: none;
   border: 1px solid var(--border);
   outline: none;
+  position: relative;
 }
 
 .featured-item-poster:focus-visible {
@@ -225,6 +226,23 @@ body {
   display: block;
   object-fit: contain;
   background: transparent;
+}
+
+.featured-item-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 8px 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.72);
+  background: linear-gradient(to top, rgba(8, 12, 18, 0.88), rgba(8, 12, 18, 0.18), transparent);
+  pointer-events: none;
+  overflow-wrap: anywhere;
 }
 
 .featured-item-no-image {
@@ -988,6 +1006,12 @@ section {
   display: block;
 }
 
+.admin-image-modal-meta {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .batch-grid-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -1450,6 +1474,11 @@ section {
 
   .featured-fallback-title {
     font-size: 10px;
+  }
+
+  .featured-item-caption {
+    font-size: 9px;
+    padding: 12px 4px 4px;
   }
 
   .admin-bar {

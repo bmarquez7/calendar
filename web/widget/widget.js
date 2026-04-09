@@ -900,6 +900,10 @@ function renderFeatured() {
       image.loading = "lazy";
       image.decoding = "async";
       box.appendChild(image);
+      const caption = document.createElement("span");
+      caption.className = "featured-item-caption";
+      caption.textContent = eventTitle;
+      box.appendChild(caption);
       applyFeaturedPosterColor(box, eventImageUrl, image);
     } else {
       box.classList.add("featured-item-no-image");
