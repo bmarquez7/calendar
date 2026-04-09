@@ -120,6 +120,7 @@ const calendarView = document.getElementById("calendar-view");
 const eventModal = document.getElementById("event-modal");
 const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
+const featuredColorCache = new Map();
 
 state.weekStart = startOfWeek(new Date());
 
@@ -201,6 +202,118 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function clampColorChannel(value) {
+  return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+}
+
+function rgbString({ r, g, b }) {
+  return `rgb(${clampColorChannel(r)}, ${clampColorChannel(g)}, ${clampColorChannel(b)})`;
+}
+
+function fallbackAverageColor(data) {
+  let totalWeight = 0;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3] / 255;
+    if (alpha <= 0.05) continue;
+    totalWeight += alpha;
+    r += data[index] * alpha;
+    g += data[index + 1] * alpha;
+    b += data[index + 2] * alpha;
+  }
+
+  if (!totalWeight) {
+    return "rgb(32, 39, 48)";
+  }
+
+  return rgbString({
+    r: r / totalWeight,
+    g: g / totalWeight,
+    b: b / totalWeight
+  });
+}
+
+function extractProminentColor(img) {
+  const width = Math.max(12, Math.min(32, img.naturalWidth || 24));
+  const height = Math.max(12, Math.min(32, img.naturalHeight || 24));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return "rgb(32, 39, 48)";
+
+  context.drawImage(img, 0, 0, width, height);
+  const { data } = context.getImageData(0, 0, width, height);
+  const buckets = new Map();
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3] / 255;
+    if (alpha <= 0.08) continue;
+
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    const brightness = (red + green + blue) / 3;
+    const quantizedRed = Math.round(red / 24) * 24;
+    const quantizedGreen = Math.round(green / 24) * 24;
+    const quantizedBlue = Math.round(blue / 24) * 24;
+    const key = `${quantizedRed},${quantizedGreen},${quantizedBlue}`;
+    const weight = alpha * (0.7 + saturation) * (brightness < 235 ? 1 : 0.55);
+    const bucket = buckets.get(key) || { score: 0, r: 0, g: 0, b: 0, weight: 0 };
+    bucket.score += weight;
+    bucket.weight += alpha;
+    bucket.r += red * alpha;
+    bucket.g += green * alpha;
+    bucket.b += blue * alpha;
+    buckets.set(key, bucket);
+  }
+
+  const winner = [...buckets.values()].sort((a, b) => b.score - a.score)[0];
+  if (!winner || !winner.weight) {
+    return fallbackAverageColor(data);
+  }
+
+  return rgbString({
+    r: winner.r / winner.weight,
+    g: winner.g / winner.weight,
+    b: winner.b / winner.weight
+  });
+}
+
+function applyFeaturedPosterColor(box, imageUrl, image) {
+  const cached = featuredColorCache.get(imageUrl);
+  if (cached) {
+    box.style.setProperty("--featured-poster-bg", cached);
+    return;
+  }
+
+  const updateColor = () => {
+    try {
+      const color = extractProminentColor(image);
+      featuredColorCache.set(imageUrl, color);
+      box.style.setProperty("--featured-poster-bg", color);
+    } catch {
+      box.style.setProperty("--featured-poster-bg", "rgb(32, 39, 48)");
+    }
+  };
+
+  if (image.complete && image.naturalWidth > 0) {
+    updateColor();
+    return;
+  }
+
+  image.addEventListener("load", updateColor, { once: true });
+  image.addEventListener("error", () => {
+    box.style.setProperty("--featured-poster-bg", "rgb(32, 39, 48)");
+  }, { once: true });
 }
 
 function toArray(value) {
@@ -506,10 +619,10 @@ function featuredFallbackSort(a, b) {
 
 function getHighlightedEvents() {
   const selected = state.events
-    .filter((event) => event.is_highlighted && isFeaturedEligibleArea(event.area))
+    .filter((event) => event.is_highlighted && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
   const fallback = state.events
-    .filter((event) => !event.is_highlighted && isFeaturedEligibleArea(event.area))
+    .filter((event) => !event.is_highlighted && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
     .sort(featuredFallbackSort);
   return [...selected, ...fallback].slice(0, 10);
 }
@@ -633,7 +746,15 @@ function renderFeatured() {
     box.ariaLabel = `${eventTitle}. Open event details.`;
     box.title = eventTitle;
     if (eventImageUrl) {
-      box.innerHTML = `<img class="featured-poster-image" src="${eventImageUrl}" alt="${escapeHtml(eventTitle)}" loading="lazy" />`;
+      const image = document.createElement("img");
+      image.className = "featured-poster-image";
+      image.crossOrigin = "anonymous";
+      image.src = eventImageUrl;
+      image.alt = eventTitle;
+      image.loading = "lazy";
+      image.decoding = "async";
+      box.appendChild(image);
+      applyFeaturedPosterColor(box, eventImageUrl, image);
     } else {
       box.classList.add("featured-item-no-image");
       box.innerHTML = `<div class="featured-fallback"><span class="featured-fallback-title">${escapeHtml(eventTitle)}</span></div>`;
