@@ -143,6 +143,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists set_events_updated_at on public.events;
 create trigger set_events_updated_at
 before update on public.events
 for each row execute procedure public.set_updated_at();
@@ -178,12 +179,10 @@ for select to authenticated using (public.has_admin_role('moderator'));
 -- Anyone can insert (submissions go to pending)
 drop policy if exists "Public insert" on public.events;
 drop policy if exists "Anon submit pending" on public.events;
-create policy "Anon submit pending" on public.events
-for insert to anon with check (status = 'pending');
-
 drop policy if exists "Authenticated submit pending or admin insert" on public.events;
-create policy "Authenticated submit pending or admin insert" on public.events
-for insert to authenticated with check (public.has_admin_role('editor') or status = 'pending');
+drop policy if exists "Editor insert events" on public.events;
+create policy "Editor insert events" on public.events
+for insert to authenticated with check (public.has_admin_role('editor'));
 
 drop policy if exists "Admin update" on public.events;
 create policy "Admin update" on public.events
@@ -193,7 +192,8 @@ drop policy if exists "Admin delete" on public.events;
 create policy "Admin delete" on public.events
 for delete to authenticated using (public.has_admin_role('editor'));
 
-grant select, insert on public.events to anon, authenticated;
+grant select on public.events to anon, authenticated;
+grant insert on public.events to authenticated;
 grant update, delete on public.events to authenticated;
 
 alter table public.site_settings enable row level security;

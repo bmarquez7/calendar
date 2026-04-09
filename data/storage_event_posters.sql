@@ -3,10 +3,21 @@ values ('event-posters', 'event-posters', true)
 on conflict (id) do nothing;
 
 drop policy if exists "Public can upload posters" on storage.objects;
-create policy "Public can upload posters"
+drop policy if exists "Public can upload submission posters" on storage.objects;
+create policy "Public can upload submission posters"
 on storage.objects
 for insert
-to public
+to anon
+with check (
+  bucket_id = 'event-posters'
+  and name like 'public-batch/%'
+);
+
+drop policy if exists "Authenticated can upload posters" on storage.objects;
+create policy "Authenticated can upload posters"
+on storage.objects
+for insert
+to authenticated
 with check (bucket_id = 'event-posters');
 
 drop policy if exists "Public can read posters" on storage.objects;

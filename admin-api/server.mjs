@@ -14,7 +14,7 @@ const {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   SUPABASE_SERVICE_ROLE_KEY,
-  APP_ORIGIN = "*",
+  APP_ORIGIN = "",
   OWNER_EMAIL = "",
   SMTP_HOST = "",
   SMTP_PORT = "587",
@@ -36,10 +36,20 @@ const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const ROLE_RANK = { moderator: 1, editor: 2, owner: 3 };
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const MAX_PUBLIC_SUBMISSION_EVENTS = 250;
+const PUBLIC_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const PUBLIC_RATE_LIMITS = {
+  submissions: 12,
+  accessRequests: 6,
+  languageOptions: 20
+};
+const CUSTOM_LANGUAGE_LABEL_RE = /^[\p{L}\p{M}0-9 .,'’()\/&+-]{1,120}$/u;
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(__dirname, "..", "web");
+const appOrigin = normalizeOrigin(APP_ORIGIN);
 let lastCleanupRunAt = 0;
 let cleanupPromise = null;
+const publicRateLimitState = new Map();
 const emailRecipients = [...new Set((NOTIFY_EMAILS || OWNER_EMAIL || "")
   .split(",")
   .map((value) => value.trim())
@@ -54,7 +64,13 @@ const mailTransport = SMTP_HOST && SMTP_FROM
   : null;
 
 await app.register(cors, {
-  origin: APP_ORIGIN === "*" ? true : APP_ORIGIN,
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    callback(null, Boolean(appOrigin && origin === appOrigin));
+  },
   methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"]
 });
@@ -70,6 +86,71 @@ await app.register(fastifyStatic, {
     res.setHeader("Surrogate-Control", "no-store");
   }
 });
+
+function normalizeOrigin(value) {
+  const input = String(value || "").trim();
+  if (!input) return "";
+  try {
+    return new URL(input).origin;
+  } catch {
+    return "";
+  }
+}
+
+function normalizeOptionalEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!email) return null;
+  return SIMPLE_EMAIL_RE.test(email) ? email : null;
+}
+
+function normalizePublicUrl(value) {
+  const input = String(value || "").trim();
+  if (!input) return null;
+  try {
+    const url = new URL(input);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeOptionalNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function requestRateLimitKey(request, scope) {
+  const forwardedFor = String(request.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  const remote = forwardedFor || request.ip || request.socket?.remoteAddress || "unknown";
+  return `${scope}:${remote}`;
+}
+
+function enforcePublicRateLimit(request, reply, scope, maxRequests) {
+  const key = requestRateLimitKey(request, scope);
+  const now = Date.now();
+  const windowStart = now - PUBLIC_RATE_LIMIT_WINDOW_MS;
+  if (publicRateLimitState.size > 5000) {
+    for (const [storedKey, timestamps] of publicRateLimitState.entries()) {
+      if (!timestamps.some((timestamp) => timestamp > windowStart)) {
+        publicRateLimitState.delete(storedKey);
+      }
+    }
+  }
+  const attempts = (publicRateLimitState.get(key) || []).filter((timestamp) => timestamp > windowStart);
+  if (attempts.length >= maxRequests) {
+    reply
+      .code(429)
+      .header("Retry-After", String(Math.ceil(PUBLIC_RATE_LIMIT_WINDOW_MS / 1000)))
+      .send({ error: "Too many requests. Please wait a few minutes and try again." });
+    return false;
+  }
+  attempts.push(now);
+  publicRateLimitState.set(key, attempts);
+  return true;
+}
 
 async function getRole(user) {
   const { data, error } = await serviceClient
@@ -142,7 +223,10 @@ function uniqueImageUrls(featuredValue, galleryValues) {
 }
 
 function normalizeSubmissionRow(row) {
-  const eventImageUrls = uniqueImageUrls(row?.event_image_url, row?.event_image_urls);
+  const eventImageUrls = uniqueImageUrls(
+    normalizePublicUrl(row?.event_image_url),
+    toArray(row?.event_image_urls).map((value) => normalizePublicUrl(value)).filter(Boolean)
+  );
   return {
     status: "pending",
     title_en: String(row?.title_en || "").trim(),
@@ -160,19 +244,19 @@ function normalizeSubmissionRow(row) {
     date_start: row?.date_start || null,
     date_end: row?.date_end || null,
     price_type: String(row?.price_type || "").trim(),
-    price_min: row?.price_min ?? null,
-    price_max: row?.price_max ?? null,
+    price_min: normalizeOptionalNumber(row?.price_min),
+    price_max: normalizeOptionalNumber(row?.price_max),
     currency: row?.currency ? String(row.currency).trim() : "ALL",
-    ticket_url: row?.ticket_url ? String(row.ticket_url).trim() : null,
+    ticket_url: normalizePublicUrl(row?.ticket_url),
     event_image_url: eventImageUrls[0] || null,
     event_image_urls: eventImageUrls.length ? eventImageUrls : null,
     recurrence_group_id: row?.recurrence_group_id ? String(row.recurrence_group_id).trim() : null,
     organizer_name: row?.organizer_name ? String(row.organizer_name).trim() : null,
-    organizer_email: row?.organizer_email ? String(row.organizer_email).trim() : null,
+    organizer_email: normalizeOptionalEmail(row?.organizer_email),
     submitter_name: row?.submitter_name ? String(row.submitter_name).trim() : null,
-    submitter_email: row?.submitter_email ? String(row.submitter_email).trim() : null,
+    submitter_email: normalizeOptionalEmail(row?.submitter_email),
     submitter_note: row?.submitter_note ? String(row.submitter_note).trim() : null,
-    source_url: row?.source_url ? String(row.source_url).trim() : null,
+    source_url: normalizePublicUrl(row?.source_url),
     is_highlighted: false
   };
 }
@@ -280,7 +364,10 @@ function duplicateConflictErrorMessage(conflicts) {
   return `Duplicate same-day event detected. ${parts.join(" | ")}`.trim();
 }
 
-function validateSubmissionRow(row, index) {
+function validateSubmissionRow(row, index, sourceRow = {}) {
+  if (row.title_en.length > 200) return `Event ${index + 1} title is too long.`;
+  if (row.description_en.length > 2000) return `Event ${index + 1} description must be 2000 characters or fewer.`;
+  if (String(row.location_en || "").length > 240) return `Event ${index + 1} address is too long.`;
   const required = [
     row.title_en,
     row.description_en,
@@ -298,11 +385,50 @@ function validateSubmissionRow(row, index) {
   if (!row.event_language.length) {
     return `Event ${index + 1} must include at least one language.`;
   }
+  if (row.event_language.length > 12) {
+    return `Event ${index + 1} can include up to 12 languages.`;
+  }
+  if (row.event_language.some((value) => String(value || "").trim().length > 120)) {
+    return `Event ${index + 1} includes a language label that is too long.`;
+  }
+  if (row.event_language.some((value) => !CUSTOM_LANGUAGE_LABEL_RE.test(String(value || "").trim()))) {
+    return `Event ${index + 1} includes a language label with unsupported characters.`;
+  }
+  if (String(row.organizer_name || "").length > 160) return `Event ${index + 1} organizer name is too long.`;
+  if (String(row.submitter_name || "").length > 160) return `Event ${index + 1} submitter name is too long.`;
+  if (String(row.submitter_note || "").length > 2000) return `Event ${index + 1} note for admin is too long.`;
+  if (new Date(row.date_end).getTime() < new Date(row.date_start).getTime()) {
+    return `Event ${index + 1} must end after it starts.`;
+  }
   if (row.price_type !== "Free" && (row.price_min === null || row.price_min === "" || row.price_max === null || row.price_max === "")) {
     return `Event ${index + 1} needs min and max prices unless it is Free.`;
   }
+  if (row.price_min !== null && row.price_min < 0) {
+    return `Event ${index + 1} cannot have a negative minimum price.`;
+  }
+  if (row.price_max !== null && row.price_max < 0) {
+    return `Event ${index + 1} cannot have a negative maximum price.`;
+  }
+  if (row.price_min !== null && row.price_max !== null && row.price_max < row.price_min) {
+    return `Event ${index + 1} cannot have a maximum price lower than the minimum price.`;
+  }
   if (toArray(row.event_image_urls).length > 5) {
     return `Event ${index + 1} can include up to 5 photos.`;
+  }
+  if (String(sourceRow?.event_image_url || "").trim() && !row.event_image_url && !toArray(row.event_image_urls).length) {
+    return `Event ${index + 1} has an invalid image URL.`;
+  }
+  if (String(sourceRow?.ticket_url || "").trim() && !row.ticket_url) {
+    return `Event ${index + 1} has an invalid ticket URL.`;
+  }
+  if (String(sourceRow?.source_url || "").trim() && !row.source_url) {
+    return `Event ${index + 1} has an invalid website URL.`;
+  }
+  if (String(sourceRow?.organizer_email || "").trim() && !row.organizer_email) {
+    return `Event ${index + 1} has an invalid organizer email.`;
+  }
+  if (String(sourceRow?.submitter_email || "").trim() && !row.submitter_email) {
+    return `Event ${index + 1} has an invalid submitter email.`;
   }
   return "";
 }
@@ -360,8 +486,8 @@ async function sendMailSafe(message) {
 }
 
 function adminRedirectUrl() {
-  if (!APP_ORIGIN || APP_ORIGIN === "*") return "";
-  return `${APP_ORIGIN.replace(/\/+$/, "")}/admin/`;
+  if (!appOrigin) return "";
+  return `${appOrigin}/admin/`;
 }
 
 function describeAuthAdminError(error) {
@@ -485,7 +611,7 @@ async function notifyAdminOfSubmission(insertedRows) {
       "",
       ...lines,
       "",
-      `Review in admin: ${APP_ORIGIN === "*" ? "" : `${APP_ORIGIN}/admin/`}`
+      `Review in admin: ${adminRedirectUrl() || "Open the admin portal"}`
     ].join("\n")
   });
 }
@@ -731,11 +857,18 @@ app.addHook("preHandler", async (request, reply) => {
 
 app.addHook("onSend", async (request, reply, payload) => {
   const path = request.raw.url || "";
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  reply.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+
   if (path.startsWith("/admin") || path.startsWith("/widget") || path.startsWith("/shared/") || path.startsWith("/v1/")) {
     reply.header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     reply.header("Pragma", "no-cache");
     reply.header("Expires", "0");
     reply.header("Surrogate-Control", "no-store");
+  }
+  if (path.startsWith("/admin") || path.startsWith("/v1/")) {
+    reply.header("X-Frame-Options", "SAMEORIGIN");
   }
   return payload;
 });
@@ -771,6 +904,7 @@ app.get("/v1/me/role", async (request, reply) => {
 });
 
 app.post("/v1/public-submissions", async (request, reply) => {
+  if (!enforcePublicRateLimit(request, reply, "submissions", PUBLIC_RATE_LIMITS.submissions)) return;
   const submittedEvents = Array.isArray(request.body?.events) ? request.body.events : [];
   if (!submittedEvents.length) return reply.code(400).send({ error: "At least one event is required" });
   if (submittedEvents.length > MAX_PUBLIC_SUBMISSION_EVENTS) {
@@ -779,7 +913,7 @@ app.post("/v1/public-submissions", async (request, reply) => {
 
   const normalized = submittedEvents.map(normalizeSubmissionRow);
   for (let i = 0; i < normalized.length; i += 1) {
-    const validationError = validateSubmissionRow(normalized[i], i);
+    const validationError = validateSubmissionRow(normalized[i], i, submittedEvents[i]);
     if (validationError) {
       return reply.code(400).send({ error: validationError });
     }
@@ -814,14 +948,28 @@ app.post("/v1/public-submissions", async (request, reply) => {
 });
 
 app.post("/v1/admin-access-requests", async (request, reply) => {
-  const email = String(request.body?.email || "").trim().toLowerCase();
+  if (!enforcePublicRateLimit(request, reply, "access-requests", PUBLIC_RATE_LIMITS.accessRequests)) return;
+  const email = normalizeOptionalEmail(request.body?.email);
   const name = String(request.body?.name || "").trim();
   const note = String(request.body?.note || "").trim();
   const requestedRole = String(request.body?.requested_role || "moderator").trim();
 
-  if (!email) return reply.code(400).send({ error: "Email is required" });
-  if (!["moderator", "editor", "owner"].includes(requestedRole)) {
+  if (!email) return reply.code(400).send({ error: "A valid email is required" });
+  if (!["moderator", "editor"].includes(requestedRole)) {
     return reply.code(400).send({ error: "Invalid requested role" });
+  }
+  if (name.length > 160) return reply.code(400).send({ error: "Name is too long" });
+  if (note.length > 2000) return reply.code(400).send({ error: "Note is too long" });
+
+  const existingPending = await serviceClient
+    .from("admin_access_requests")
+    .select("id")
+    .eq("email", email)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existingPending.error) return reply.code(500).send({ error: existingPending.error.message });
+  if (existingPending.data) {
+    return reply.code(409).send({ error: "There is already a pending access request for this email." });
   }
 
   const inserted = await serviceClient
@@ -861,9 +1009,13 @@ app.get("/v1/language-options", async (_, reply) => {
 });
 
 app.post("/v1/language-options", async (request, reply) => {
+  if (!enforcePublicRateLimit(request, reply, "language-options", PUBLIC_RATE_LIMITS.languageOptions)) return;
   const label = String(request.body?.label || "").trim();
   if (!label) return reply.code(400).send({ error: "Language label is required" });
   if (label.length > 120) return reply.code(400).send({ error: "Language label is too long" });
+  if (!CUSTOM_LANGUAGE_LABEL_RE.test(label)) {
+    return reply.code(400).send({ error: "Language label contains unsupported characters." });
+  }
 
   const labelKey = normalizeLanguageKey(label);
   const existing = await serviceClient
@@ -916,8 +1068,8 @@ app.get("/v1/email-diagnostics", async (request, reply) => {
 
 app.post("/v1/email-test", async (request, reply) => {
   if (!canRole(request.role, "owner")) return reply.code(403).send({ error: "Owner required" });
-  const targetEmail = String(request.body?.email || request.user?.email || "").trim().toLowerCase();
-  if (!targetEmail) return reply.code(400).send({ error: "No target email available" });
+  const targetEmail = normalizeOptionalEmail(request.body?.email || request.user?.email);
+  if (!targetEmail) return reply.code(400).send({ error: "No valid target email available" });
 
   const result = await sendMailSafe({
     from: SMTP_FROM,
@@ -1135,9 +1287,9 @@ app.get("/v1/users", async (request, reply) => {
 
 app.post("/v1/users/invite", async (request, reply) => {
   if (!canRole(request.role, "editor")) return reply.code(403).send({ error: "Editor+ required" });
-  const email = String(request.body?.email || "").trim().toLowerCase();
+  const email = normalizeOptionalEmail(request.body?.email);
   const { role = "moderator" } = request.body || {};
-  if (!email) return reply.code(400).send({ error: "Email required" });
+  if (!email) return reply.code(400).send({ error: "A valid email is required" });
   if (!["moderator", "editor", "owner"].includes(role)) return reply.code(400).send({ error: "Invalid role" });
   if (role !== "moderator" && !canRole(request.role, "owner")) {
     return reply.code(403).send({ error: "Only owner can invite editor/owner" });
@@ -1233,4 +1385,9 @@ const cleanupTimer = setInterval(() => {
 }, CLEANUP_INTERVAL_MS);
 cleanupTimer.unref?.();
 
-app.listen({ port: Number(PORT), host: HOST });
+try {
+  await app.listen({ port: Number(PORT), host: HOST });
+} catch (error) {
+  app.log.error({ err: error }, "Server failed to start");
+  process.exit(1);
+}

@@ -51,12 +51,10 @@ for select to authenticated using (public.has_admin_role('moderator'));
 
 drop policy if exists "Public insert" on public.events;
 drop policy if exists "Anon submit pending" on public.events;
-create policy "Anon submit pending" on public.events
-for insert to anon with check (status = 'pending');
-
 drop policy if exists "Authenticated submit pending or admin insert" on public.events;
-create policy "Authenticated submit pending or admin insert" on public.events
-for insert to authenticated with check (public.has_admin_role('editor') or status = 'pending');
+drop policy if exists "Editor insert events" on public.events;
+create policy "Editor insert events" on public.events
+for insert to authenticated with check (public.has_admin_role('editor'));
 
 drop policy if exists "Admin update" on public.events;
 create policy "Admin update" on public.events
@@ -100,7 +98,8 @@ drop policy if exists "Authenticated delete roles" on public.admin_user_roles;
 create policy "Owner delete roles" on public.admin_user_roles
 for delete to authenticated using (public.has_admin_role('owner'));
 
-grant select, insert on public.events to anon, authenticated;
+grant select on public.events to anon, authenticated;
+grant insert on public.events to authenticated;
 grant update, delete on public.events to authenticated;
 grant select on public.site_settings to anon, authenticated;
 grant insert, update on public.site_settings to authenticated;

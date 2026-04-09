@@ -23,7 +23,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: APP_ORIGIN
-        value: https://grow-albania-calendar.onrender.com
+        sync: false
       - key: OWNER_EMAIL
         sync: false
       - key: NOTIFY_EMAILS
