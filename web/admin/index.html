@@ -57,7 +57,8 @@
             <h2 class="center-text">Admin Tasks</h2>
             <p class="small">Select a task box to open that task on its own page.</p>
             <div class="task-grid">
-              <button class="task-card" data-open-page="event-queue-page" data-min-role="moderator">Review event queue</button>
+              <button class="task-card" data-open-page="event-queue-page" data-queue-mode="current" data-min-role="moderator">Review event queue</button>
+              <button class="task-card" data-open-page="event-queue-page" data-queue-mode="past" data-min-role="moderator">Past Events</button>
               <button class="task-card" data-open-page="event-editor-page" data-min-role="editor">Create and edit events</button>
               <button class="task-card" data-open-page="batch-page" data-min-role="editor">Batch add events</button>
               <button class="task-card" data-open-page="users-page" data-min-role="editor">Manage users and roles</button>
@@ -70,7 +71,8 @@
           <div class="admin-bar" style="margin-bottom: 12px;">
             <button class="secondary" data-back-to-hub>Back to tasks</button>
           </div>
-          <p class="small">Recurring submissions are grouped together by default. Use <strong>Break apart</strong> on a series if you want to review or reject a single occurrence.</p>
+          <h2 id="queue-page-title">Review event queue</h2>
+          <p class="small" id="queue-page-description">Recurring submissions are grouped together by default. Use <strong>Break apart</strong> on a series if you want to review or reject a single occurrence.</p>
           <div class="admin-bar admin-queue-toolbar">
             <span class="badge" id="admin-count">0 events</span>
             <input id="admin-search" type="search" placeholder="Search title, area, type, or location" />

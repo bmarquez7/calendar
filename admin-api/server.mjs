@@ -35,6 +35,7 @@ const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const ROLE_RANK = { moderator: 1, editor: 2, owner: 3 };
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const PAST_EVENT_RETENTION_MONTHS = 3;
 const MAX_PUBLIC_SUBMISSION_EVENTS = 250;
 const PUBLIC_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const PUBLIC_RATE_LIMITS = {
@@ -799,7 +800,9 @@ async function sendReviewEmails(eventRow, status, note) {
 }
 
 async function cleanupExpiredEvents() {
-  const cutoffIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - PAST_EVENT_RETENTION_MONTHS);
+  const cutoffIso = cutoff.toISOString();
 
   const endedDelete = await serviceClient
     .from("events")

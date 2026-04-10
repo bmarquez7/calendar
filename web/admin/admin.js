@@ -17,6 +17,8 @@ const refreshButton = document.getElementById("refresh");
 const adminCount = document.getElementById("admin-count");
 const adminSearchInput = document.getElementById("admin-search");
 const adminTableBody = document.querySelector("#admin-table tbody");
+const queuePageTitle = document.getElementById("queue-page-title");
+const queuePageDescription = document.getElementById("queue-page-description");
 const adminSelectAll = document.getElementById("admin-select-all");
 const adminSelectedCount = document.getElementById("admin-selected-count");
 const adminBulkStatus = document.getElementById("admin-bulk-status");
@@ -63,6 +65,7 @@ const taskPages = Array.from(document.querySelectorAll(".task-page"));
 const taskButtons = Array.from(document.querySelectorAll("[data-open-page]"));
 const hubBackButtons = Array.from(document.querySelectorAll("[data-back-to-hub]"));
 const ACTIVE_TASK_STORAGE_KEY = "grow-albania-admin-active-page";
+const ACTIVE_QUEUE_MODE_STORAGE_KEY = "grow-albania-admin-queue-mode";
 const adminImageModal = document.getElementById("admin-image-modal");
 const adminImageClose = document.getElementById("admin-image-close");
 const adminImageBody = document.getElementById("admin-image-body");
@@ -91,6 +94,22 @@ function writeStoredTaskPage(pageId) {
   }
 }
 
+function readStoredQueueMode() {
+  try {
+    return sessionStorage.getItem(ACTIVE_QUEUE_MODE_STORAGE_KEY) || "current";
+  } catch {
+    return "current";
+  }
+}
+
+function writeStoredQueueMode(mode) {
+  try {
+    sessionStorage.setItem(ACTIVE_QUEUE_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage access hiccups and keep the UI usable.
+  }
+}
+
 let currentEvents = [];
 let currentAccessRequests = [];
 let selectedId = null;
@@ -98,6 +117,7 @@ let currentRole = null;
 let accessToken = null;
 let lastKnownSession = null;
 let activeTaskPage = readStoredTaskPage();
+let activeQueueMode = readStoredQueueMode();
 let settingsLoaded = false;
 let currentSettings = { id: 1 };
 let activeTextKey = "hero_title";
@@ -121,6 +141,17 @@ const EVENT_STATUS_RANK = {
   needs_info: 1,
   approved: 2,
   denied: 3
+};
+
+const QUEUE_MODE_META = {
+  current: {
+    title: "Review event queue",
+    description: "Recurring submissions are grouped together by default. Use Break apart on a series if you want to review or reject a single occurrence."
+  },
+  past: {
+    title: "Past Events",
+    description: "Past events stay here for up to 3 months so you can reschedule, edit, or cancel them without needing a brand new submission."
+  }
 };
 
 function escapeHtml(value) {
@@ -679,6 +710,13 @@ function buildSingleEventEntry(event) {
 
 function sortReviewEntries(entries) {
   return entries.sort((a, b) => {
+    if (activeQueueMode === "past") {
+      const endDiff = queueEntryEndsAt(b) - queueEntryEndsAt(a);
+      if (endDiff !== 0) return endDiff;
+      const createdDiff = b.createdAt - a.createdAt;
+      if (createdDiff !== 0) return createdDiff;
+      return dateValue(b.events?.[0]?.date_start) - dateValue(a.events?.[0]?.date_start);
+    }
     const statusDiff = a.sortStatusRank - b.sortStatusRank;
     if (statusDiff !== 0) return statusDiff;
     const createdDiff = b.createdAt - a.createdAt;
@@ -823,6 +861,38 @@ function toLocalInputValue(value) {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function queueModeValue(value) {
+  return value === "past" ? "past" : "current";
+}
+
+function setActiveQueueMode(mode) {
+  activeQueueMode = queueModeValue(mode);
+  writeStoredQueueMode(activeQueueMode);
+}
+
+function eventEndsAt(event) {
+  const rawValue = event?.date_end || event?.date_start;
+  const date = new Date(rawValue || 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isPastEvent(event, reference = new Date()) {
+  const endDate = eventEndsAt(event);
+  return Boolean(endDate && endDate < reference);
+}
+
+function eventsForActiveQueue(events) {
+  const now = new Date();
+  return events.filter((event) => activeQueueMode === "past" ? isPastEvent(event, now) : !isPastEvent(event, now));
+}
+
+function queueEntryEndsAt(entry) {
+  const timestamps = (entry.events || [])
+    .map((event) => eventEndsAt(event)?.getTime() || 0)
+    .filter(Boolean);
+  return timestamps.length ? Math.max(...timestamps) : 0;
 }
 
 async function uploadEventImage(file, folder) {
@@ -1493,13 +1563,17 @@ async function deleteEvent(id) {
 }
 
 function renderTable() {
+  const queueMeta = QUEUE_MODE_META[activeQueueMode] || QUEUE_MODE_META.current;
+  if (queuePageTitle) queuePageTitle.textContent = queueMeta.title;
+  if (queuePageDescription) queuePageDescription.textContent = queueMeta.description;
   adminTableBody.innerHTML = "";
-  const filteredEvents = currentEvents.filter((event) => matchesAdminSearch(event, adminSearchQuery));
+  const sourceEvents = eventsForActiveQueue(currentEvents);
+  const filteredEvents = sourceEvents.filter((event) => matchesAdminSearch(event, adminSearchQuery));
   const entries = buildReviewEntries(filteredEvents);
   currentVisibleEventIds = [...new Set(filteredEvents.map((event) => String(event.id)).filter(Boolean))];
   adminCount.textContent = adminSearchQuery
-    ? `${filteredEvents.length} of ${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`
-    : `${currentEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
+    ? `${filteredEvents.length} of ${sourceEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`
+    : `${sourceEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
 
   function renderPoster(cell, entry) {
     if (entry.posterUrl) {
@@ -2209,6 +2283,9 @@ bulkDeleteButton?.addEventListener("click", () => performBulkDelete([...selected
 taskButtons.forEach((button) => {
   button.addEventListener("click", async () => {
     const pageId = button.dataset.openPage || "";
+    if (pageId === "event-queue-page") {
+      setActiveQueueMode(button.dataset.queueMode || "current");
+    }
     showTaskPage(pageId);
     if (pageId === "event-queue-page") await loadEvents();
     if (pageId === "users-page") await loadUsers();
