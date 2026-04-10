@@ -66,6 +66,10 @@ const ACTIVE_TASK_STORAGE_KEY = "grow-albania-admin-active-page";
 const adminImageModal = document.getElementById("admin-image-modal");
 const adminImageClose = document.getElementById("admin-image-close");
 const adminImageBody = document.getElementById("admin-image-body");
+const featureOverrideModal = document.getElementById("feature-override-modal");
+const featureOverrideMessage = document.getElementById("feature-override-message");
+const featureOverrideConfirm = document.getElementById("feature-override-confirm");
+const featureOverrideCancel = document.getElementById("feature-override-cancel");
 
 function readStoredTaskPage() {
   try {
@@ -97,6 +101,8 @@ let activeTaskPage = readStoredTaskPage();
 let settingsLoaded = false;
 let currentSettings = { id: 1 };
 let activeTextKey = "hero_title";
+let selectedEventRecurrenceGroupId = null;
+let pendingFeatureOverrideResolver = null;
 const MAX_BATCH_ROWS = 50;
 const selectedEventIds = new Set();
 const expandedSeriesIds = new Set();
@@ -263,16 +269,150 @@ function normalizeSearchValue(value) {
     .toLowerCase();
 }
 
-function canFeatureEventArea(area, status = "approved", featureBlocked = false) {
-  return !featureBlocked && status === "approved" && isFeaturedEligibleArea(area);
+function featureEligibility(area, status = "approved", featureBlocked = false, featureOverride = false, recurrenceGroupId = null) {
+  if (featureBlocked) {
+    return {
+      canFeature: false,
+      canOverride: false,
+      reason: "This event is blocked from being featured."
+    };
+  }
+  if (status !== "approved") {
+    return {
+      canFeature: false,
+      canOverride: false,
+      reason: "Only approved events can be featured."
+    };
+  }
+  if (recurrenceGroupId) {
+    return {
+      canFeature: false,
+      canOverride: false,
+      reason: "Repeating events cannot be featured."
+    };
+  }
+  if (isFeaturedEligibleArea(area) || featureOverride) {
+    return {
+      canFeature: true,
+      canOverride: false,
+      reason: ""
+    };
+  }
+  return {
+    canFeature: false,
+    canOverride: true,
+    reason: "This is not located in Tirana, do you wish to proceed?"
+  };
+}
+
+function canFeatureEventArea(area, status = "approved", featureBlocked = false, featureOverride = false, recurrenceGroupId = null) {
+  return featureEligibility(area, status, featureBlocked, featureOverride, recurrenceGroupId).canFeature;
+}
+
+function canOverrideFeatureEventArea(area, status = "approved", featureBlocked = false, featureOverride = false, recurrenceGroupId = null) {
+  return featureEligibility(area, status, featureBlocked, featureOverride, recurrenceGroupId).canOverride;
+}
+
+function setEditFeatureOverride(value) {
+  if (editForm.feature_override) {
+    editForm.feature_override.value = value ? "true" : "false";
+  }
+}
+
+function getEditFeatureOverride() {
+  return editForm.feature_override?.value === "true";
+}
+
+function askFeatureOverrideConfirmation(count = 1) {
+  if (!featureOverrideModal || !featureOverrideMessage) {
+    return Promise.resolve(window.confirm("This is not located in Tirana, do you wish to proceed?"));
+  }
+  if (pendingFeatureOverrideResolver) {
+    pendingFeatureOverrideResolver(false);
+    pendingFeatureOverrideResolver = null;
+  }
+  featureOverrideMessage.textContent = count > 1
+    ? `This is not located in Tirana, do you wish to proceed? ${count} selected events will be highlighted with an override.`
+    : "This is not located in Tirana, do you wish to proceed?";
+  featureOverrideModal.classList.remove("hidden");
+  featureOverrideConfirm?.focus();
+  return new Promise((resolve) => {
+    pendingFeatureOverrideResolver = resolve;
+  });
+}
+
+function closeFeatureOverrideModal(confirmed = false) {
+  if (!featureOverrideModal?.classList.contains("hidden")) {
+    featureOverrideModal.classList.add("hidden");
+  }
+  if (pendingFeatureOverrideResolver) {
+    pendingFeatureOverrideResolver(confirmed);
+    pendingFeatureOverrideResolver = null;
+  }
 }
 
 function syncEditHighlightAvailability() {
   const featureBlocked = Boolean(editForm.feature_blocked?.checked);
-  const canHighlight = canFeatureEventArea(editForm.area.value, editForm.status.value, featureBlocked);
-  editForm.is_highlighted.disabled = !canHighlight;
-  if (!canHighlight) editForm.is_highlighted.checked = false;
-  editForm.is_highlighted.closest(".toggle-field")?.classList.toggle("disabled", !canHighlight);
+  if (isFeaturedEligibleArea(editForm.area.value) && getEditFeatureOverride()) {
+    setEditFeatureOverride(false);
+  }
+  const eligibility = featureEligibility(
+    editForm.area.value,
+    editForm.status.value,
+    featureBlocked,
+    getEditFeatureOverride(),
+    selectedEventRecurrenceGroupId
+  );
+  const canInteract = eligibility.canFeature || eligibility.canOverride;
+  editForm.is_highlighted.disabled = !canInteract;
+  if (editForm.is_highlighted.checked && eligibility.canOverride && !getEditFeatureOverride()) {
+    editForm.is_highlighted.checked = false;
+  }
+  if (!canInteract) {
+    editForm.is_highlighted.checked = false;
+    setEditFeatureOverride(false);
+  }
+  editForm.is_highlighted.closest(".toggle-field")?.classList.toggle("disabled", !canInteract);
+}
+
+async function handleEditHighlightToggle() {
+  if (!editForm.is_highlighted.checked) {
+    setEditFeatureOverride(false);
+    syncEditHighlightAvailability();
+    return;
+  }
+
+  const directEligibility = featureEligibility(
+    editForm.area.value,
+    editForm.status.value,
+    Boolean(editForm.feature_blocked?.checked),
+    false,
+    selectedEventRecurrenceGroupId
+  );
+
+  if (directEligibility.canFeature) {
+    setEditFeatureOverride(false);
+    syncEditHighlightAvailability();
+    return;
+  }
+
+  if (directEligibility.canOverride) {
+    const confirmed = await askFeatureOverrideConfirmation();
+    if (confirmed) {
+      setEditFeatureOverride(true);
+      syncEditHighlightAvailability();
+      return;
+    }
+    editForm.is_highlighted.checked = false;
+    setEditFeatureOverride(false);
+    syncEditHighlightAvailability();
+    return;
+  }
+
+  editForm.is_highlighted.checked = false;
+  setEditFeatureOverride(false);
+  syncEditHighlightAvailability();
+  setStatus(editStatus, directEligibility.reason || "This event cannot be featured.", "error");
 }
 
 function hasRole(minRole) {
@@ -494,10 +634,13 @@ function summarizeSeries(events) {
     posterUrl: safeUrl(first.event_image_url),
     imageUrls: sorted.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: sorted.some((event) => event.is_highlighted),
+    featureOverride: sorted.some((event) => event.feature_override),
+    featureOverrideCount: sorted.filter((event) => event.feature_override).length,
     featureBlocked: sorted.every((event) => Boolean(event.feature_blocked)),
     featureBlockedCount: sorted.filter((event) => event.feature_blocked).length,
     selectedIds: sorted.map((event) => String(event.id)),
-    canHighlight: sorted.every((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked)),
+    canHighlight: sorted.some((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
+    canOverrideHighlight: sorted.some((event) => canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     createdAt: Math.max(...sorted.map((event) => dateValue(event.created_at))),
     sortStatusRank: Math.min(...sorted.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
     expanded: expandedSeriesIds.has(String(first.recurrence_group_id)),
@@ -521,10 +664,13 @@ function buildSingleEventEntry(event) {
     posterUrl: safeUrl(event.event_image_url),
     imageUrls: getEventImages(event),
     isHighlighted: Boolean(event.is_highlighted),
+    featureOverride: Boolean(event.feature_override),
+    featureOverrideCount: event.feature_override ? 1 : 0,
     featureBlocked: Boolean(event.feature_blocked),
     featureBlockedCount: event.feature_blocked ? 1 : 0,
     selectedIds: [String(event.id)],
-    canHighlight: canFeatureEventArea(event.area, event.status, event.feature_blocked),
+    canHighlight: canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id),
+    canOverrideHighlight: canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id),
     createdAt: dateValue(event.created_at),
     sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99,
     titleGroupKey: normalizeTitleGroupKey(event.title_en || "")
@@ -563,10 +709,13 @@ function summarizeTitleGroup(entries) {
     posterUrl: entries.find((entry) => entry.posterUrl)?.posterUrl || "",
     imageUrls: allEvents.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: allEvents.some((event) => event.is_highlighted),
+    featureOverride: allEvents.some((event) => event.feature_override),
+    featureOverrideCount: allEvents.filter((event) => event.feature_override).length,
     featureBlocked: allEvents.every((event) => Boolean(event.feature_blocked)),
     featureBlockedCount: allEvents.filter((event) => event.feature_blocked).length,
     selectedIds: allEvents.map((event) => String(event.id)),
-    canHighlight: allEvents.every((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked)),
+    canHighlight: allEvents.some((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
+    canOverrideHighlight: allEvents.some((event) => canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     createdAt: Math.max(...allEvents.map((event) => dateValue(event.created_at))),
     sortStatusRank: Math.min(...allEvents.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
     expanded: expandedTitleGroupIds.has(titleKey),
@@ -886,6 +1035,7 @@ async function signOut() {
 
 function fillEditForm(event) {
   selectedId = event.id;
+  selectedEventRecurrenceGroupId = event.recurrence_group_id || null;
   editForm.title_en.value = event.title_en || "";
   editForm.title_es.value = event.title_es || "";
   editForm.title_sq.value = event.title_sq || "";
@@ -904,6 +1054,7 @@ function fillEditForm(event) {
   editForm.repeat_until.value = "";
   editForm.status.value = event.status || "pending";
   editForm.is_highlighted.checked = Boolean(event.is_highlighted);
+  setEditFeatureOverride(Boolean(event.feature_override));
   editForm.feature_blocked.checked = Boolean(event.feature_blocked);
   editForm.price_type.value = event.price_type || "";
   editForm.price_min.value = event.price_min || "";
@@ -917,12 +1068,14 @@ function fillEditForm(event) {
 
 function clearFormForNew() {
   selectedId = null;
+  selectedEventRecurrenceGroupId = null;
   editForm.reset();
   editForm.repeat_frequency.value = "none";
   editForm.repeat_until.value = "";
   editForm.status.value = "approved";
   editForm.area.value = "Skanderbeg Square";
   editForm.is_highlighted.checked = false;
+  setEditFeatureOverride(false);
   editForm.feature_blocked.checked = false;
   editForm.price_type.value = "Paid";
   editForm.currency.value = "ALL";
@@ -934,6 +1087,11 @@ function clearFormForNew() {
 function toPayload(formData) {
   const status = formData.get("status") || "approved";
   const featureBlocked = formData.get("feature_blocked") === "on";
+  const repeatFrequency = formData.get("repeat_frequency") || "none";
+  const area = formData.get("area") || "Skanderbeg Square";
+  const rawFeatureOverride = formData.get("feature_override") === "true";
+  const featureOverride = rawFeatureOverride && !isFeaturedEligibleArea(area) && repeatFrequency === "none" && !featureBlocked;
+  const canHighlight = canFeatureEventArea(area, status, featureBlocked, featureOverride, repeatFrequency === "none" ? selectedEventRecurrenceGroupId : "recurring");
   return {
     title_en: formData.get("title_en") || "",
     title_es: formData.get("title_es") || null,
@@ -945,18 +1103,19 @@ function toPayload(formData) {
     location_es: formData.get("location_es") || null,
     location_sq: formData.get("location_sq") || null,
     event_type: formData.get("event_type") || "Community",
-    area: formData.get("area") || "Skanderbeg Square",
+    area,
     event_language: (formData.get("event_language") || "en")
       .split(",")
       .map((v) => v.trim())
       .filter(Boolean),
     date_start: toIsoOrNull(formData.get("date_start")),
     date_end: toIsoOrNull(formData.get("date_end")),
-    repeat_frequency: formData.get("repeat_frequency") || "none",
+    repeat_frequency: repeatFrequency,
     repeat_until: formData.get("repeat_until") || null,
     status,
+    feature_override: featureOverride,
     feature_blocked: featureBlocked,
-    is_highlighted: !featureBlocked && canFeatureEventArea(formData.get("area"), status, featureBlocked) && formData.get("is_highlighted") === "on",
+    is_highlighted: !featureBlocked && canHighlight && formData.get("is_highlighted") === "on",
     price_type: formData.get("price_type") || "Paid",
     price_min: formData.get("price_min") || null,
     price_max: formData.get("price_max") || null,
@@ -1107,23 +1266,70 @@ async function performBulkHighlight(ids, isHighlighted) {
     return;
   }
 
-  const eligible = isHighlighted
-    ? events.filter((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked))
-    : events;
-  if (!eligible.length) {
-    setStatus(adminBulkStatus, "Only approved Tirana events can be highlighted.", "error");
+  if (!isHighlighted) {
+    const { error } = await client
+      .from("events")
+      .update({ is_highlighted: false, feature_override: false })
+      .in("id", events.map((event) => event.id));
+    if (error) {
+      setStatus(adminBulkStatus, error.message, "error");
+      return;
+    }
+    setStatus(adminBulkStatus, `Unhighlighted ${events.length} event(s).`, "success");
+    await loadEvents();
     return;
   }
 
-  const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).in("id", eligible.map((event) => event.id));
-  if (error) {
-    setStatus(adminBulkStatus, error.message, "error");
+  const directlyEligible = events.filter((event) =>
+    canFeatureEventArea(event.area, event.status, event.feature_blocked, false, event.recurrence_group_id)
+  );
+  const overrideEligible = events.filter((event) =>
+    canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, false, event.recurrence_group_id)
+  );
+  const skippedCount = events.length - directlyEligible.length - overrideEligible.length;
+
+  if (!directlyEligible.length && !overrideEligible.length) {
+    setStatus(adminBulkStatus, "Only approved Tirana events can be highlighted unless you confirm a non-Tirana override.", "error");
     return;
   }
 
+  if (overrideEligible.length) {
+    const confirmed = await askFeatureOverrideConfirmation(overrideEligible.length);
+    if (!confirmed) {
+      setStatus(adminBulkStatus, "Highlight override cancelled.", "error");
+      return;
+    }
+  }
+
+  if (directlyEligible.length) {
+    const { error } = await client
+      .from("events")
+      .update({ is_highlighted: true, feature_override: false })
+      .in("id", directlyEligible.map((event) => event.id));
+    if (error) {
+      setStatus(adminBulkStatus, error.message, "error");
+      return;
+    }
+  }
+
+  if (overrideEligible.length) {
+    const { error } = await client
+      .from("events")
+      .update({ is_highlighted: true, feature_override: true })
+      .in("id", overrideEligible.map((event) => event.id));
+    if (error) {
+      setStatus(adminBulkStatus, error.message, "error");
+      return;
+    }
+  }
+
+  const highlightedCount = directlyEligible.length + overrideEligible.length;
+  const detailParts = [];
+  if (overrideEligible.length) detailParts.push(`${overrideEligible.length} override`);
+  if (skippedCount) detailParts.push(`${skippedCount} skipped`);
   setStatus(
     adminBulkStatus,
-    `${isHighlighted ? "Highlighted" : "Unhighlighted"} ${eligible.length} event(s)${eligible.length !== events.length ? ` (${events.length - eligible.length} skipped)` : ""}.`,
+    `Highlighted ${highlightedCount} event(s)${detailParts.length ? ` (${detailParts.join(", ")})` : ""}.`,
     "success"
   );
   await loadEvents();
@@ -1145,7 +1351,7 @@ async function performFeatureBlock(ids, featureBlocked) {
   }
 
   const patch = featureBlocked
-    ? { feature_blocked: true, is_highlighted: false }
+    ? { feature_blocked: true, is_highlighted: false, feature_override: false }
     : { feature_blocked: false };
 
   const { error } = await client.from("events").update(patch).in("id", events.map((event) => event.id));
@@ -1194,19 +1400,40 @@ async function performBulkDelete(ids) {
 async function toggleHighlight(id, isHighlighted) {
   if (!hasRole("moderator")) return;
   const targetEvent = currentEvents.find((event) => String(event.id) === String(id));
-  if (isHighlighted && targetEvent && !canFeatureEventArea(targetEvent.area, targetEvent.status, targetEvent.feature_blocked)) {
-    const reason = targetEvent.feature_blocked
-      ? "This event is blocked from being featured."
-      : "Only approved Tirana events can be featured on the public calendar.";
-    setStatus(editStatus, reason, "error");
+  if (!targetEvent) return;
+
+  if (!isHighlighted) {
+    const { error } = await client.from("events").update({ is_highlighted: false, feature_override: false }).eq("id", id);
+    if (error) {
+      setStatus(editStatus, error.message, "error");
+      return;
+    }
+    setStatus(editStatus, "Event removed from highlights.", "success");
+    await loadEvents();
     return;
   }
-  const { error } = await client.from("events").update({ is_highlighted: isHighlighted }).eq("id", id);
+
+  const directEligibility = featureEligibility(targetEvent.area, targetEvent.status, targetEvent.feature_blocked, false, targetEvent.recurrence_group_id);
+  let patch = { is_highlighted: true, feature_override: false };
+  if (!directEligibility.canFeature) {
+    if (!directEligibility.canOverride) {
+      setStatus(editStatus, directEligibility.reason || "This event cannot be featured.", "error");
+      return;
+    }
+    const confirmed = await askFeatureOverrideConfirmation();
+    if (!confirmed) {
+      setStatus(editStatus, "Highlight override cancelled.", "error");
+      return;
+    }
+    patch = { is_highlighted: true, feature_override: true };
+  }
+
+  const { error } = await client.from("events").update(patch).eq("id", id);
   if (error) {
     setStatus(editStatus, error.message, "error");
     return;
   }
-  setStatus(editStatus, isHighlighted ? "Event highlighted." : "Event removed from highlights.", "success");
+  setStatus(editStatus, patch.feature_override ? "Event highlighted with non-Tirana override." : "Event highlighted.", "success");
   await loadEvents();
 }
 
@@ -1309,17 +1536,29 @@ function renderTable() {
   }
 
   function renderFeatureState(cell, entry) {
+    const pills = [];
+    if (entry.isHighlighted) pills.push("Yes");
+    const overrideCount = Number(entry.featureOverrideCount || 0);
+    if (overrideCount > 0) {
+      pills.push(overrideCount === (entry.selectedIds?.length || 0) ? "Override" : `${overrideCount} override`);
+    }
     const blockedCount = Number(entry.featureBlockedCount || 0);
     if (blockedCount > 0) {
-      const blocked = document.createElement("span");
-      blocked.className = "status-pill";
-      blocked.textContent = blockedCount === (entry.selectedIds?.length || 0)
-        ? "Blocked"
-        : `${blockedCount} blocked`;
-      cell.appendChild(blocked);
+      pills.push(blockedCount === (entry.selectedIds?.length || 0) ? "Blocked" : `${blockedCount} blocked`);
+    }
+    if (!pills.length) {
+      cell.textContent = "—";
       return;
     }
-    cell.innerHTML = entry.isHighlighted ? '<span class="status-pill">Yes</span>' : "—";
+    const wrap = document.createElement("div");
+    wrap.className = "admin-status-summary";
+    pills.forEach((label) => {
+      const pill = document.createElement("span");
+      pill.className = "status-pill";
+      pill.textContent = label;
+      wrap.appendChild(pill);
+    });
+    cell.appendChild(wrap);
   }
 
   function createActionButton(label, onClick, secondary = false) {
@@ -1366,7 +1605,7 @@ function renderTable() {
       actions.appendChild(createActionButton(`Deny${bulkSuffix}`, () => performBulkReview(targetIds, "denied"), true));
       actions.appendChild(createActionButton(`Needs info${bulkSuffix}`, () => performBulkReview(targetIds, "needs_info"), true));
 
-      if (entry.canHighlight || entry.isHighlighted) {
+      if (entry.canHighlight || entry.canOverrideHighlight || entry.isHighlighted) {
         actions.appendChild(createActionButton(
           entry.isHighlighted ? `Unhighlight${bulkSuffix}` : `Highlight${bulkSuffix}`,
           () => performBulkHighlight(targetIds, !entry.isHighlighted),
@@ -1986,9 +2225,19 @@ adminImageModal?.addEventListener("click", (event) => {
     closeAdminImageModal();
   }
 });
+featureOverrideConfirm?.addEventListener("click", () => closeFeatureOverrideModal(true));
+featureOverrideCancel?.addEventListener("click", () => closeFeatureOverrideModal(false));
+featureOverrideModal?.addEventListener("click", (event) => {
+  if (event.target?.dataset?.closeFeatureOverride === "true") {
+    closeFeatureOverrideModal(false);
+  }
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && adminImageModal && !adminImageModal.classList.contains("hidden")) {
     closeAdminImageModal();
+  }
+  if (event.key === "Escape" && featureOverrideModal && !featureOverrideModal.classList.contains("hidden")) {
+    closeFeatureOverrideModal(false);
   }
 });
 
@@ -2227,6 +2476,7 @@ populateGroupedSelect(editForm.area, AREA_GROUPS, "Choose area");
 editForm.area.addEventListener("change", syncEditHighlightAvailability);
 editForm.status.addEventListener("change", syncEditHighlightAvailability);
 editForm.feature_blocked?.addEventListener("change", syncEditHighlightAvailability);
+editForm.is_highlighted?.addEventListener("change", handleEditHighlightToggle);
 syncEditHighlightAvailability();
 
 client.auth.onAuthStateChange(async (_evt, session) => {

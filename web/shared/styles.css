@@ -1014,6 +1014,19 @@ section {
   font-size: 13px;
 }
 
+.admin-confirm-modal-content {
+  max-width: 520px;
+  width: min(520px, calc(100vw - 32px));
+}
+
+.admin-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
 .batch-grid-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);

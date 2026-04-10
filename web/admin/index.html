@@ -153,6 +153,7 @@
                 <input type="checkbox" name="is_highlighted" />
                 <span>Highlight this event on the public calendar</span>
               </label>
+              <input type="hidden" name="feature_override" value="false" />
               <label class="toggle-field">
                 <input type="checkbox" name="feature_blocked" />
                 <span>Never feature this event on the public calendar</span>
@@ -360,6 +361,18 @@
       <div class="modal-content admin-image-modal-content">
         <button type="button" class="modal-close secondary" id="admin-image-close">Close</button>
         <div id="admin-image-body"></div>
+      </div>
+    </div>
+
+    <div id="feature-override-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="feature-override-title">
+      <div class="modal-backdrop" data-close-feature-override="true"></div>
+      <div class="modal-content admin-confirm-modal-content">
+        <h3 id="feature-override-title">Highlight Outside Tirana?</h3>
+        <p id="feature-override-message">This is not located in Tirana, do you wish to proceed?</p>
+        <div class="admin-confirm-actions">
+          <button type="button" id="feature-override-confirm">YES, HIGHLIGHT</button>
+          <button type="button" class="secondary" id="feature-override-cancel">NO, CLOSE</button>
+        </div>
       </div>
     </div>
 

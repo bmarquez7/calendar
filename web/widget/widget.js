@@ -727,7 +727,7 @@ function featuredFallbackSort(a, b) {
 
 function getFeaturedCandidateEvents() {
   const selected = state.events
-    .filter((event) => event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
+    .filter((event) => event.is_highlighted && !event.feature_blocked && (isFeaturedEligibleArea(event.area) || event.feature_override) && !event.recurrence_group_id)
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
   const fallback = state.events
     .filter((event) => !event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
