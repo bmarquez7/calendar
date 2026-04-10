@@ -492,24 +492,43 @@ function openDayModal(date, events) {
     return;
   }
 
-  const items = events
+  const groupMeta = buildDayModalGroupMeta(events);
+  const sortedEvents = [...events].sort((a, b) => {
+    const aMeta = groupMeta.get(String(a.id)) || { bucketCount: 1, isRecurring: false };
+    const bMeta = groupMeta.get(String(b.id)) || { bucketCount: 1, isRecurring: false };
+    const aGrouped = aMeta.isRecurring || aMeta.bucketCount > 1;
+    const bGrouped = bMeta.isRecurring || bMeta.bucketCount > 1;
+    if (aGrouped !== bGrouped) return aGrouped ? 1 : -1;
+    const dateDiff = new Date(a.date_start || 0) - new Date(b.date_start || 0);
+    if (dateDiff !== 0) return dateDiff;
+    return pickText(a, "title").localeCompare(pickText(b, "title"), state.uiLang);
+  });
+
+  const items = sortedEvents
     .map(
-      (event) => `
+      (event) => {
+        const meta = groupMeta.get(String(event.id)) || { bucketCount: 1, isRecurring: false };
+        const badges = [];
+        if (meta.isRecurring) badges.push("Recurring");
+        if (meta.bucketCount > 1) badges.push(`Grouped x${meta.bucketCount}`);
+        return `
       <div class="modal-event" data-event-id="${event.id}">
         <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
         ${getEventImages(event)[0] ? `<img class="modal-poster" src="${getEventImages(event)[0]}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
         <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
         <p>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</p>
+        ${badges.length ? `<div class="modal-event-badges">${badges.map((badge) => `<span class="modal-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
       </div>
-    `
+    `;
+      }
     )
     .join("");
 
   openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3>${items}`, { anchorEl: calendarAnchor });
   modalBody.querySelectorAll(".modal-event").forEach((el) => {
     el.addEventListener("click", () => {
-      const target = events.find((evt) => String(evt.id) === el.dataset.eventId);
-      if (target) openModal(eventDetailHtml(target));
+      const target = sortedEvents.find((evt) => String(evt.id) === el.dataset.eventId);
+      if (target) openModal(eventDetailHtml(target), { anchorEl: calendarAnchor });
     });
   });
 }
@@ -924,6 +943,52 @@ function groupEventsByDate(events) {
   }, {});
 }
 
+function dayModalGroupKey(event) {
+  const titleKey = normalizeDuplicateValue(event.title_en || pickText(event, "title"));
+  if (!titleKey) return "";
+  const areaKey = normalizeDuplicateValue(normalizeAreaValue(event.area));
+  const locationKey = normalizeDuplicateValue(event.location_en || event.location_es || event.location_sq || normalizeAreaValue(event.area));
+  return [titleKey, areaKey, locationKey].join("|");
+}
+
+function buildDayModalGroupMeta(events) {
+  const recurrenceBuckets = new Map();
+  const titleBuckets = new Map();
+
+  events.forEach((event) => {
+    if (event.recurrence_group_id) {
+      const key = String(event.recurrence_group_id);
+      if (!recurrenceBuckets.has(key)) recurrenceBuckets.set(key, []);
+      recurrenceBuckets.get(key).push(event);
+    }
+    const titleKey = dayModalGroupKey(event);
+    if (!titleKey) return;
+    if (!titleBuckets.has(titleKey)) titleBuckets.set(titleKey, []);
+    titleBuckets.get(titleKey).push(event);
+  });
+
+  const meta = new Map();
+  events.forEach((event) => {
+    const recurrenceCount = event.recurrence_group_id ? (recurrenceBuckets.get(String(event.recurrence_group_id)) || []).length : 0;
+    const titleCount = (titleBuckets.get(dayModalGroupKey(event)) || []).length;
+    meta.set(String(event.id), {
+      isRecurring: Boolean(event.recurrence_group_id),
+      bucketCount: Math.max(recurrenceCount, titleCount, 1)
+    });
+  });
+  return meta;
+}
+
+function getMonthCalendarMetrics(days, grouped) {
+  const maxEvents = days.reduce((max, date) => Math.max(max, (grouped[toDateKey(date)] || []).length), 0);
+  const visibleChipLimit = Math.min(5, Math.max(3, maxEvents || 0));
+  const cellHeight = Math.min(184, 96 + (visibleChipLimit - 3) * 26 + (maxEvents > visibleChipLimit ? 18 : 0));
+  return {
+    visibleChipLimit,
+    cellHeight
+  };
+}
+
 function renderCalendarMonth(events) {
   calendarView.innerHTML = "";
   const grouped = groupEventsByDate(events);
@@ -934,9 +999,11 @@ function renderCalendarMonth(events) {
   for (let i = 0; i < 42; i += 1) {
     days.push(addDays(gridStart, i));
   }
+  const { visibleChipLimit, cellHeight } = getMonthCalendarMetrics(days, grouped);
 
   const wrapper = document.createElement("div");
   wrapper.className = "calendar";
+  wrapper.style.setProperty("--calendar-cell-height", `${cellHeight}px`);
   const header = document.createElement("div");
   header.className = "calendar-header";
   const title = document.createElement("h3");
@@ -981,17 +1048,17 @@ function renderCalendarMonth(events) {
     const eventsWrap = document.createElement("div");
     eventsWrap.className = "calendar-events";
     const items = grouped[key] || [];
-    items.slice(0, 3).forEach((event) => {
+    items.slice(0, visibleChipLimit).forEach((event) => {
       const chip = document.createElement("div");
       chip.className = "calendar-chip";
       chip.title = pickText(event, "title");
       chip.textContent = pickText(event, "title");
       eventsWrap.appendChild(chip);
     });
-    if (items.length > 3) {
+    if (items.length > visibleChipLimit) {
       const more = document.createElement("div");
       more.className = "calendar-chip";
-      more.textContent = `+${items.length - 3} more`;
+      more.textContent = `+${items.length - visibleChipLimit} more`;
       eventsWrap.appendChild(more);
     }
     cell.addEventListener("click", () => openDayModal(date, items));
