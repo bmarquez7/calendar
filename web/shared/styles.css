@@ -98,6 +98,10 @@ body {
   margin-right: auto;
 }
 
+.widget-hero p {
+  max-width: 58ch;
+}
+
 .hero.align-left h1,
 .hero.align-left p {
   text-align: left;
@@ -188,6 +192,11 @@ body {
   margin-top: 0;
   margin-bottom: 10px;
   font-family: var(--font-title);
+}
+
+.widget-summary-bar,
+.widget-view-bar {
+  align-items: center;
 }
 
 .featured-grid {
@@ -408,6 +417,10 @@ section {
   gap: 8px;
   animation: fadeIn 0.4s ease;
   cursor: pointer;
+}
+
+.card p {
+  margin: 0;
 }
 
 .card h3 {
@@ -1646,6 +1659,10 @@ section {
     padding: 14px 14px 12px;
   }
 
+  .widget-page .hero {
+    padding: 14px 14px 12px;
+  }
+
   .hero h1 {
     font-size: 28px;
     margin-bottom: 6px;
@@ -1654,6 +1671,11 @@ section {
   .hero p {
     font-size: 14px;
     line-height: 1.4;
+  }
+
+  .widget-hero .hero-top {
+    margin-bottom: 10px;
+    gap: 10px;
   }
 
   .controls,
@@ -1676,6 +1698,21 @@ section {
   .form-card,
   .calendar {
     padding: 12px;
+  }
+
+  .widget-calendar-section {
+    margin-top: 12px;
+  }
+
+  .featured-box {
+    margin-top: 12px;
+    border-radius: 16px;
+    padding: 10px;
+  }
+
+  .featured-box h3 {
+    margin-bottom: 8px;
+    font-size: 22px;
   }
 
   .featured-grid {
@@ -1712,6 +1749,41 @@ section {
     align-items: stretch;
   }
 
+  .widget-summary-bar,
+  .widget-view-bar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .widget-summary-bar > button,
+  .widget-summary-bar > .button-link,
+  .widget-view-bar > button {
+    width: auto;
+  }
+
+  .widget-summary-bar {
+    gap: 8px;
+  }
+
+  .widget-summary-bar .badge {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .widget-summary-bar #reset-filters {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .widget-view-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
   .admin-queue-toolbar {
     flex-direction: row;
     align-items: center;
@@ -1744,6 +1816,10 @@ section {
 
   .hero-actions {
     justify-items: stretch;
+  }
+
+  .widget-hero .hero-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero-actions .button-link,
@@ -1798,6 +1874,21 @@ section {
     gap: 8px;
   }
 
+  .calendar {
+    border-radius: 16px;
+    padding: 10px;
+  }
+
+  .calendar-header h3 {
+    font-size: 20px;
+  }
+
+  .calendar-header button {
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
   .calendar-grid {
     gap: 4px;
   }
@@ -1819,6 +1910,7 @@ section {
   .calendar-chip {
     font-size: 10px;
     padding: 2px 5px;
+    border-radius: 8px;
   }
 
   .calendar-week-scroll {
@@ -1860,6 +1952,23 @@ section {
     padding: 14px 14px 22px;
   }
 
+  #event-modal .modal-close {
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  #event-modal h3 {
+    margin-bottom: 8px;
+    font-size: 24px;
+    line-height: 1.1;
+  }
+
+  .modal-event {
+    padding: 10px;
+    margin-top: 8px;
+  }
+
   #description-modal .description-modal-content,
   #picker-modal .picker-modal-content {
     position: relative;
@@ -1884,6 +1993,30 @@ section {
   #view-controls .toggle-button {
     padding: 8px 10px;
     font-size: 13px;
+  }
+
+  .cards {
+    gap: 10px;
+  }
+
+  .card {
+    padding: 12px;
+    border-radius: 16px;
+    gap: 6px;
+  }
+
+  .card h3 {
+    font-size: 24px;
+    line-height: 1.06;
+  }
+
+  .event-poster {
+    max-height: 220px;
+  }
+
+  .card .meta {
+    gap: 6px 8px;
+    font-size: 12px;
   }
 
   .public-submit-card {
@@ -2064,6 +2197,10 @@ section {
     font-size: 24px;
   }
 
+  .widget-page .hero h1 {
+    font-size: 24px;
+  }
+
   .featured-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 3px;
@@ -2116,6 +2253,44 @@ section {
 
   .mobile-filter-bar {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .widget-hero .hero-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .widget-summary-bar {
+    flex-wrap: wrap;
+  }
+
+  .widget-summary-bar .badge,
+  .widget-summary-bar #reset-filters {
+    width: 100%;
+  }
+
+  .widget-view-bar {
+    gap: 5px;
+  }
+
+  .widget-view-bar .toggle-button {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .featured-box h3 {
+    font-size: 20px;
+  }
+
+  .calendar-header h3 {
+    font-size: 18px;
+  }
+
+  .card {
+    padding: 11px;
+  }
+
+  .card h3 {
+    font-size: 22px;
   }
 
   .public-submit-toolbar-actions {

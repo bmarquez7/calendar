@@ -12,9 +12,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../shared/styles.css" />
   </head>
-  <body>
+  <body class="widget-page">
     <div class="app widget-app">
-      <section class="hero">
+      <section class="hero widget-hero">
         <div class="hero-top">
           <div class="language-switcher">
             <button type="button" class="secondary" id="language-button">Language</button>
@@ -51,12 +51,12 @@
         </div>
       </section>
 
-      <section>
-        <div class="admin-bar" style="margin-bottom: 12px;">
+      <section class="widget-calendar-section">
+        <div class="admin-bar widget-summary-bar" style="margin-bottom: 12px;">
           <span class="badge" id="results-count">0 events</span>
           <button class="secondary" id="reset-filters">Reset filters</button>
         </div>
-        <div class="admin-bar" id="view-controls" style="margin-bottom: 12px;">
+        <div class="admin-bar widget-view-bar" id="view-controls" style="margin-bottom: 12px;">
           <button class="secondary toggle-button" data-view="month">Month</button>
           <button class="secondary toggle-button" data-view="week">Week</button>
           <button class="secondary toggle-button" data-view="list">List</button>
