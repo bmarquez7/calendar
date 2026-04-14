@@ -35,12 +35,14 @@
             type="button"
             class="secondary"
             id="mobile-filters-button"
-            aria-haspopup="dialog"
             aria-expanded="false"
-            aria-controls="mobile-filter-modal"
+            aria-controls="mobile-filter-panel"
           >
             Filters
           </button>
+        </div>
+        <div id="mobile-filter-panel" class="mobile-filter-panel hidden">
+          <div id="mobile-filter-controls" class="mobile-filter-controls"></div>
         </div>
         <div class="controls" id="filter-controls"></div>
         <div class="featured-box">
@@ -68,16 +70,6 @@
       <div class="modal-content">
         <button type="button" class="modal-close secondary" id="modal-close">Close</button>
         <div id="modal-body"></div>
-      </div>
-    </div>
-    <div id="mobile-filter-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mobile-filter-title">
-      <div class="modal-backdrop" data-close-mobile-filters="true"></div>
-      <div class="modal-content mobile-filter-modal-content">
-        <div class="mobile-filter-modal-header">
-          <h2 id="mobile-filter-title">Filters</h2>
-          <button type="button" class="modal-close secondary" id="mobile-filters-close">Done</button>
-        </div>
-        <div id="mobile-filter-controls" class="mobile-filter-controls"></div>
       </div>
     </div>
 

@@ -112,9 +112,8 @@ const uiStrings = {
 const filterControls = document.getElementById("filter-controls");
 const mobileSearchSlot = document.getElementById("mobile-search-slot");
 const mobileFiltersButton = document.getElementById("mobile-filters-button");
-const mobileFilterModal = document.getElementById("mobile-filter-modal");
+const mobileFilterPanel = document.getElementById("mobile-filter-panel");
 const mobileFilterControls = document.getElementById("mobile-filter-controls");
-const mobileFiltersClose = document.getElementById("mobile-filters-close");
 const eventList = document.getElementById("event-list");
 const featuredGrid = document.getElementById("featured-grid");
 const featuredTitle = document.getElementById("featured-title");
@@ -673,29 +672,17 @@ function syncFilterInputs() {
   }
 }
 
-function positionMobileFilterSheet() {
-  if (!mobileFilterModal || !mobileFiltersButton || !isMobileViewport()) return;
-  const anchor = document.getElementById("mobile-filter-bar") || mobileFiltersButton;
-  const rect = anchor.getBoundingClientRect();
-  const top = Math.round(rect.bottom + 8);
-  const left = Math.round(Math.max(8, rect.left));
-  const right = Math.round(Math.max(8, window.innerWidth - rect.right));
-  mobileFilterModal.style.setProperty("--mobile-filter-top", `${top}px`);
-  mobileFilterModal.style.setProperty("--mobile-filter-left", `${left}px`);
-  mobileFilterModal.style.setProperty("--mobile-filter-right", `${right}px`);
-}
-
-function openMobileFilterSheet() {
-  if (!mobileFilterModal) return;
-  positionMobileFilterSheet();
-  mobileFilterModal.classList.remove("hidden");
-  mobileFiltersButton?.setAttribute("aria-expanded", "true");
-}
-
-function closeMobileFilterSheet() {
-  if (!mobileFilterModal) return;
-  mobileFilterModal.classList.add("hidden");
+function closeMobileFilterPanel() {
+  if (!mobileFilterPanel) return;
+  mobileFilterPanel.classList.add("hidden");
   mobileFiltersButton?.setAttribute("aria-expanded", "false");
+}
+
+function toggleMobileFilterPanel() {
+  if (!mobileFilterPanel) return;
+  const nextOpen = mobileFilterPanel.classList.contains("hidden");
+  mobileFilterPanel.classList.toggle("hidden", !nextOpen);
+  mobileFiltersButton?.setAttribute("aria-expanded", nextOpen ? "true" : "false");
 }
 
 function createSelect(name, labelText, options, includeAny = true, config = {}) {
@@ -1287,8 +1274,6 @@ function syncUiCopy() {
   document.getElementById("hero-subtitle").textContent = pickSetting("hero_subtitle", strings.subtitle);
   featuredTitle.textContent = pickSetting("featured_title", "Highlighted Events");
   resetFilters.textContent = strings.reset;
-  const mobileFilterTitle = document.getElementById("mobile-filter-title");
-  if (mobileFilterTitle) mobileFilterTitle.textContent = "Filters";
   const currentLang = UI_LANGS.find((lang) => lang.code === state.uiLang);
   languageButton.textContent = `Language: ${currentLang ? currentLang.label : "English"}`;
 }
@@ -1334,16 +1319,7 @@ resetFilters.addEventListener("click", () => {
 });
 
 mobileFiltersButton?.addEventListener("click", () => {
-  if (!mobileFilterModal) return;
-  if (mobileFilterModal.classList.contains("hidden")) {
-    openMobileFilterSheet();
-  } else {
-    closeMobileFilterSheet();
-  }
-});
-
-mobileFiltersClose?.addEventListener("click", () => {
-  closeMobileFilterSheet();
+  toggleMobileFilterPanel();
 });
 
 viewControls.addEventListener("click", (event) => {
@@ -1398,17 +1374,12 @@ eventModal.addEventListener("click", (event) => {
     closeModal();
   }
 });
-mobileFilterModal?.addEventListener("click", (event) => {
-  if (event.target.dataset.closeMobileFilters === "true") {
-    closeMobileFilterSheet();
-  }
-});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !eventModal.classList.contains("hidden")) {
     closeModal();
   }
-  if (event.key === "Escape" && mobileFilterModal && !mobileFilterModal.classList.contains("hidden")) {
-    closeMobileFilterSheet();
+  if (event.key === "Escape" && mobileFilterPanel && !mobileFilterPanel.classList.contains("hidden")) {
+    closeMobileFilterPanel();
   }
 });
 let resizeRaf = null;
@@ -1417,20 +1388,13 @@ window.addEventListener("resize", () => {
   if (resizeRaf) cancelAnimationFrame(resizeRaf);
   resizeRaf = requestAnimationFrame(() => {
     if (!isMobileViewport()) {
-      closeMobileFilterSheet();
-    } else if (mobileFilterModal && !mobileFilterModal.classList.contains("hidden")) {
-      positionMobileFilterSheet();
+      closeMobileFilterPanel();
     }
     renderFilters();
     render();
   });
 });
-window.addEventListener("scroll", () => {
-  syncModalPlacement();
-  if (mobileFilterModal && !mobileFilterModal.classList.contains("hidden") && isMobileViewport()) {
-    positionMobileFilterSheet();
-  }
-}, { passive: true });
+window.addEventListener("scroll", syncModalPlacement, { passive: true });
 
 syncUiCopy();
 renderFilters();
