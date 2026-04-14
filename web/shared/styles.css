@@ -1128,6 +1128,49 @@ section {
   gap: 14px;
 }
 
+.submit-page .app {
+  max-width: 980px;
+}
+
+.submit-hero p {
+  max-width: 62ch;
+}
+
+.public-submit-topbar {
+  justify-content: flex-start;
+}
+
+.public-submit-meta-card,
+.public-submit-events-card,
+.public-submit-success-card {
+  overflow: hidden;
+}
+
+.public-submit-meta-card h2,
+.public-submit-success-card h2 {
+  margin-bottom: 6px;
+}
+
+.public-submit-meta-note,
+.public-submit-events-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.public-submit-toolbar {
+  align-items: center;
+  gap: 10px;
+}
+
+.public-submit-toolbar-actions {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .public-submit-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1209,12 +1252,18 @@ section {
   justify-content: center;
 }
 
+.public-submit-success-actions {
+  gap: 10px;
+}
+
 .public-submit-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(224, 215, 198, 0.72);
 }
 
 .public-submit-card-header h3 {
@@ -1235,7 +1284,7 @@ section {
 
 .public-submit-field {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   align-content: start;
   min-width: 0;
 }
@@ -1581,12 +1630,20 @@ section {
     padding: 14px 12px 32px;
   }
 
+  .submit-page .app {
+    padding-bottom: 28px;
+  }
+
   section {
     margin-top: 14px;
   }
 
   .hero {
     padding: 16px 14px;
+  }
+
+  .submit-page .hero {
+    padding: 14px 14px 12px;
   }
 
   .hero h1 {
@@ -1830,15 +1887,68 @@ section {
   }
 
   .public-submit-card {
-    padding: 12px;
+    padding: 10px;
+    border-radius: 16px;
   }
 
   .public-submit-card-header {
+    align-items: flex-start;
     margin-bottom: 8px;
+    padding-bottom: 4px;
+    gap: 8px;
   }
 
   .public-submit-section .grid-two {
     gap: 10px;
+  }
+
+  .public-submit-meta-card,
+  .public-submit-events-card,
+  .public-submit-success-card {
+    padding: 12px;
+  }
+
+  .public-submit-meta-card h2,
+  .public-submit-success-card h2 {
+    margin-bottom: 4px;
+    font-size: 22px;
+  }
+
+  .public-submit-meta-note,
+  .public-submit-events-note {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .public-submit-toolbar {
+    align-items: stretch;
+  }
+
+  .public-submit-toolbar .badge {
+    justify-content: flex-start;
+  }
+
+  .public-submit-toolbar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .public-submit-row-number {
+    font-size: 18px;
+    line-height: 1.1;
+  }
+
+  .public-submit-card-header .secondary {
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .public-submit-accordion-stack {
+    gap: 8px;
   }
 
   .public-submit-accordion {
@@ -1848,18 +1958,62 @@ section {
 
   .public-submit-accordion-toggle {
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 7px;
+    padding: 9px 10px;
+  }
+
+  .public-submit-accordion-title {
+    font-size: 14px;
   }
 
   .public-submit-accordion-summary {
     grid-column: 1 / -1;
     text-align: left;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .public-submit-accordion-panel {
-    padding: 0 12px 12px;
+    padding: 0 10px 10px;
+  }
+
+  .public-submit-grid {
+    gap: 10px;
+  }
+
+  .public-submit-field {
+    gap: 4px;
+  }
+
+  .public-submit-label {
+    font-size: 12px;
+    min-height: 0;
+  }
+
+  .public-submit-field input,
+  .public-submit-field select,
+  .public-submit-field textarea,
+  .public-submit-launch,
+  .repeat-toggle-control {
+    min-height: 42px;
+  }
+
+  .public-submit-launch {
+    padding: 9px 11px;
+  }
+
+  .public-submit-help-text,
+  .public-submit-image-help,
+  .public-submit-inline-status {
+    font-size: 11px;
+  }
+
+  .picker-modal-body {
+    gap: 10px;
   }
 
   .public-submit-action-bar {
@@ -1883,6 +2037,11 @@ section {
     gap: 8px;
   }
 
+  .public-submit-success-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .task-card {
     min-height: 72px;
   }
@@ -1898,6 +2057,10 @@ section {
   }
 
   .hero h1 {
+    font-size: 24px;
+  }
+
+  .submit-page .hero h1 {
     font-size: 24px;
   }
 
@@ -1953,6 +2116,27 @@ section {
 
   .mobile-filter-bar {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-submit-toolbar-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .public-submit-card-header {
+    flex-wrap: wrap;
+  }
+
+  .featured-image-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .featured-image-option {
+    min-height: 112px;
+  }
+
+  .featured-image-tile {
+    height: 112px;
   }
 
   .public-submit-accordion-toggle {

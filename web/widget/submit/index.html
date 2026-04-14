@@ -12,18 +12,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../../shared/styles.css" />
   </head>
-  <body>
+  <body class="submit-page">
     <div class="app widget-app">
-      <section class="hero">
-        <div class="admin-bar" style="margin-bottom: 12px;">
+      <section class="hero submit-hero">
+        <div class="admin-bar public-submit-topbar" style="margin-bottom: 12px;">
           <a class="button-link" href="/widget/">Back to calendar</a>
         </div>
         <h1>Submit Events (Batch)</h1>
         <p>Submit up to 10 events at once. All submissions are marked pending and require admin approval.</p>
       </section>
 
-      <section class="form-card public-submit-section" style="margin-top: 18px;">
+      <section class="form-card public-submit-section public-submit-meta-card" style="margin-top: 18px;">
         <h2>Submitter details</h2>
+        <p class="public-submit-meta-note">These details are optional, but they help us follow up if we need clarification before publishing.</p>
         <div class="grid-two">
           <input id="submitter-name" type="text" placeholder="Your name" />
           <input id="submitter-email" type="email" placeholder="Your email" />
@@ -35,11 +36,14 @@
         <textarea id="submitter-note" placeholder="Note for admin"></textarea>
       </section>
 
-      <section class="form-card public-submit-section" style="margin-top: 16px;">
-        <div class="admin-bar" style="margin-bottom: 10px;">
+      <section class="form-card public-submit-section public-submit-events-card" style="margin-top: 16px;">
+        <p class="public-submit-events-note">Open each event card to fill in essentials, schedule, place, pricing, and media.</p>
+        <div class="admin-bar public-submit-toolbar" style="margin-bottom: 10px;">
           <span class="badge" id="public-batch-count">1 / 10 rows</span>
-          <button type="button" class="secondary" id="public-batch-add">Add row</button>
-          <button type="button" class="secondary" id="public-batch-fill">Fill to 10</button>
+          <div class="public-submit-toolbar-actions">
+            <button type="button" class="secondary" id="public-batch-add">Add row</button>
+            <button type="button" class="secondary" id="public-batch-fill">Fill to 10</button>
+          </div>
         </div>
         <div id="public-batch-rows" class="public-submit-rows"></div>
         <div class="admin-bar public-submit-action-bar" style="margin-top: 12px;">
@@ -48,12 +52,12 @@
         <div class="notice" id="public-batch-status" style="display:none;"></div>
       </section>
 
-      <section id="public-submit-success" class="form-card public-submit-success hidden" style="margin-top: 18px;">
+      <section id="public-submit-success" class="form-card public-submit-success public-submit-success-card hidden" style="margin-top: 18px;">
         <h2>Thank you for your submission</h2>
         <p id="public-submit-success-message">
           Thanks for contributing to a more unified events calendar for Albania.
         </p>
-        <div class="admin-bar" style="margin-top: 14px;">
+        <div class="admin-bar public-submit-success-actions" style="margin-top: 14px;">
           <button id="public-submit-again" type="button" class="secondary">Submit more events</button>
           <a class="button-link" href="/widget/">Go to calendar</a>
         </div>

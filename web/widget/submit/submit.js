@@ -385,13 +385,15 @@ function createAccordionSection(card, key, titleText, summaryFn, children, optio
   toggle.addEventListener("click", () => {
     if (!isMobileSubmitLayout()) return;
     const nextOpen = !api.isOpen();
-    api.setOpen(nextOpen);
+    const sections = card._accordionSections || [];
     if (nextOpen) {
-      const sections = card._accordionSections || [];
-      const openSections = sections.filter((entry) => entry !== api && entry.isOpen());
-      while (openSections.length >= 2) {
-        openSections.shift()?.setOpen(false);
-      }
+      sections.forEach((entry) => {
+        if (entry !== api) entry.setOpen(false);
+      });
+      api.setOpen(true);
+      section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else {
+      api.setOpen(false);
     }
   });
 
@@ -411,11 +413,14 @@ function syncAccordionCard(card) {
 
   const openSections = sections.filter((section) => section.isOpen());
   if (!openSections.length) {
-    sections.forEach((section, index) => section.setOpen(index < 2 && section.defaultOpen));
-  } else {
-    openSections.forEach((section, index) => {
-      if (index >= 2) section.setOpen(false);
+    let firstOpenAssigned = false;
+    sections.forEach((section) => {
+      const shouldOpen = !firstOpenAssigned && section.defaultOpen;
+      section.setOpen(shouldOpen);
+      if (shouldOpen) firstOpenAssigned = true;
     });
+  } else {
+    openSections.slice(1).forEach((section) => section.setOpen(false));
   }
   sections.forEach((section) => section.refresh());
 }
