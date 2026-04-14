@@ -298,6 +298,133 @@ function createTextarea(className, placeholder = "", required = false) {
   return textarea;
 }
 
+function isMobileSubmitLayout() {
+  return window.matchMedia("(max-width: 720px)").matches;
+}
+
+function formatCompactDateTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function formatCompactPrice(priceType, min, max, currency) {
+  if (!priceType) return "Pricing not set";
+  if (priceType === "Free") return "Free";
+  if (min && max) return `${min}-${max} ${currency || "ALL / LEK"}`;
+  if (min || max) return `${min || max} ${currency || "ALL / LEK"}`;
+  return "Paid";
+}
+
+function mediaSummary(card) {
+  const fileCount = Array.from(card.querySelector(".image-files")?.files || []).length;
+  const imageUrl = String(card.querySelector(".image-url")?.value || "").trim();
+  if (fileCount) return `${fileCount} photo${fileCount === 1 ? "" : "s"} selected`;
+  if (imageUrl) return "External image added";
+  return "No images added";
+}
+
+function createAccordionSection(card, key, titleText, summaryFn, children, options = {}) {
+  const section = document.createElement("section");
+  section.className = "public-submit-accordion";
+  section.dataset.sectionKey = key;
+  if (options.fullWidth) section.classList.add("public-submit-accordion-full");
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "public-submit-accordion-toggle";
+
+  const title = document.createElement("span");
+  title.className = "public-submit-accordion-title";
+  title.textContent = titleText;
+
+  const summary = document.createElement("span");
+  summary.className = "public-submit-accordion-summary";
+
+  const chevron = document.createElement("span");
+  chevron.className = "public-submit-accordion-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "▾";
+
+  toggle.append(title, summary, chevron);
+
+  const panel = document.createElement("div");
+  panel.className = "public-submit-accordion-panel public-submit-grid";
+  if (options.fullWidth) panel.classList.add("public-submit-accordion-panel-full");
+  children.forEach((child) => panel.appendChild(child));
+
+  section.append(toggle, panel);
+
+  const api = {
+    section,
+    panel,
+    toggle,
+    summary,
+    defaultOpen: Boolean(options.defaultOpen),
+    refresh() {
+      summary.textContent = summaryFn();
+    },
+    setOpen(open) {
+      const isOpen = Boolean(open);
+      section.classList.toggle("is-open", isOpen);
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      panel.hidden = isMobileSubmitLayout() ? !isOpen : false;
+    },
+    isOpen() {
+      return section.classList.contains("is-open");
+    }
+  };
+
+  toggle.addEventListener("click", () => {
+    if (!isMobileSubmitLayout()) return;
+    const nextOpen = !api.isOpen();
+    api.setOpen(nextOpen);
+    if (nextOpen) {
+      const sections = card._accordionSections || [];
+      const openSections = sections.filter((entry) => entry !== api && entry.isOpen());
+      while (openSections.length >= 2) {
+        openSections.shift()?.setOpen(false);
+      }
+    }
+  });
+
+  return api;
+}
+
+function syncAccordionCard(card) {
+  const sections = card._accordionSections || [];
+  if (!sections.length) return;
+  if (!isMobileSubmitLayout()) {
+    sections.forEach((section) => {
+      section.refresh();
+      section.setOpen(true);
+    });
+    return;
+  }
+
+  const openSections = sections.filter((section) => section.isOpen());
+  if (!openSections.length) {
+    sections.forEach((section, index) => section.setOpen(index < 2 && section.defaultOpen));
+  } else {
+    openSections.forEach((section, index) => {
+      if (index >= 2) section.setOpen(false);
+    });
+  }
+  sections.forEach((section) => section.refresh());
+}
+
+function refreshAccordionSummaries(card) {
+  if (!card) return;
+  (card._accordionSections || []).forEach((section) => section.refresh());
+}
+
 function descriptionSummary(value) {
   const text = String(value || "").trim();
   if (!text) return "Open description";
@@ -332,6 +459,7 @@ function closeDescriptionModal(save) {
   if (save && activeDescriptionInput) {
     activeDescriptionInput.value = descriptionEditor.value;
     syncDescriptionButton(activeDescriptionInput);
+    refreshAccordionSummaries(activeDescriptionInput.closest(".public-submit-card"));
   }
   activeDescriptionInput = null;
   descriptionModal.hidden = true;
@@ -612,6 +740,7 @@ function syncLanguageLaunch(scope) {
   const summary = languageSummary(source);
   button.textContent = summary;
   button.classList.toggle("is-filled", summary !== "Select languages");
+  refreshAccordionSummaries(scope.closest(".public-submit-card"));
 }
 
 function createRecurringFields() {
@@ -877,6 +1006,7 @@ function syncRecurringState(card) {
 
   button.textContent = repeatSummary(editorScope);
   button.classList.toggle("is-filled", enabled);
+  refreshAccordionSummaries(card.closest?.(".public-submit-card") || card);
 }
 
 function resetRecurringSummary(card) {
@@ -886,6 +1016,7 @@ function resetRecurringSummary(card) {
   const enabled = editorScope.querySelector(".repeat-enabled")?.checked;
   button.textContent = enabled ? repeatSummary(editorScope) : "No repeat";
   button.classList.toggle("is-filled", Boolean(enabled));
+  refreshAccordionSummaries(card.closest?.(".public-submit-card") || card);
 }
 
 function openPickerModal(title, field, panel, onDone) {
@@ -1052,8 +1183,8 @@ function addRow() {
 
   header.append(title, removeButton);
 
-  const grid = document.createElement("div");
-  grid.className = "public-submit-grid";
+  const sectionStack = document.createElement("div");
+  sectionStack.className = "public-submit-accordion-stack";
 
   const titleInput = createInput("text", "title", "Event title", true);
   const addressInput = createInput("text", "address", "Street address", true);
@@ -1072,38 +1203,115 @@ function addRow() {
   const ticketUrlInput = createInput("url", "ticket-url", "Ticket / RSVP URL");
   const imageFields = createImageFields();
 
-  grid.append(
-    createField("Title *", titleInput),
-    createDescriptionField(),
-    createField("Address *", addressInput),
-    createField("Type *", eventTypeSelect),
-    createField("Area *", areaSelect),
-    createField("Start *", startInput),
-    createField("End *", endInput),
-    languageField,
-    createField("Paid / Free *", priceTypeSelect),
-    createField("Min price", priceMinInput),
-    createField("Max price", priceMaxInput),
-    createField("Currency *", currencySelect),
-    createField("Ticket URL", ticketUrlInput),
-    recurringField,
-    imageFields.imageUrlField,
-    imageFields.imageFilesField,
-    imageFields.featuredField
-  );
+  const descriptionField = createDescriptionField();
+  const titleField = createField("Title *", titleInput);
+  const typeField = createField("Type *", eventTypeSelect);
+  const addressField = createField("Address *", addressInput);
+  const areaField = createField("Area *", areaSelect);
+  const startField = createField("Start *", startInput);
+  const endField = createField("End *", endInput);
+  const priceTypeField = createField("Paid / Free *", priceTypeSelect);
+  const minPriceField = createField("Min price", priceMinInput);
+  const maxPriceField = createField("Max price", priceMaxInput);
+  const currencyField = createField("Currency *", currencySelect);
+  const ticketUrlField = createField("Ticket URL", ticketUrlInput);
 
-  card.append(header, grid);
+  const accordionSections = [
+    createAccordionSection(
+      card,
+      "essentials",
+      "Essentials",
+      () => {
+        const titleValue = titleInput.value.trim();
+        const typeValue = eventTypeSelect.value.trim();
+        if (!titleValue && !typeValue) return "Add title, description, and type";
+        if (!typeValue) return titleValue || "Add title";
+        return titleValue ? `${titleValue} · ${typeValue}` : typeValue;
+      },
+      [titleField, descriptionField, typeField],
+      { defaultOpen: true }
+    ),
+    createAccordionSection(
+      card,
+      "schedule",
+      "Schedule",
+      () => {
+        const startText = formatCompactDateTime(startInput.value);
+        const endText = formatCompactDateTime(endInput.value);
+        const repeatText = recurringField.querySelector(".repeat-launch")?.textContent || "No repeat";
+        if (!startText && !endText) return repeatText === "No repeat" ? "Set the date and time" : repeatText;
+        const dateText = [startText, endText].filter(Boolean).join(" → ");
+        return repeatText !== "No repeat" ? `${dateText} · ${repeatText}` : dateText;
+      },
+      [startField, endField, recurringField],
+      { defaultOpen: true }
+    ),
+    createAccordionSection(
+      card,
+      "place-language",
+      "Place & Language",
+      () => {
+        const address = addressInput.value.trim();
+        const area = areaSelect.value.trim();
+        const languages = languageField.querySelector(".language-launch")?.textContent || "Select languages";
+        const place = address || area || "Add address and area";
+        return languages && languages !== "Select languages" ? `${place} · ${languages}` : place;
+      },
+      [addressField, areaField, languageField]
+    ),
+    createAccordionSection(
+      card,
+      "pricing",
+      "Pricing & Links",
+      () => {
+        const priceText = formatCompactPrice(priceTypeSelect.value.trim(), priceMinInput.value.trim(), priceMaxInput.value.trim(), currencySelect.value.trim());
+        return ticketUrlInput.value.trim() ? `${priceText} · Ticket link added` : priceText;
+      },
+      [priceTypeField, minPriceField, maxPriceField, currencyField, ticketUrlField]
+    ),
+    createAccordionSection(
+      card,
+      "media",
+      "Media",
+      () => mediaSummary(card),
+      [imageFields.imageUrlField, imageFields.imageFilesField, imageFields.featuredField],
+      { fullWidth: true }
+    )
+  ];
+
+  card._accordionSections = accordionSections;
+  accordionSections.forEach((section) => sectionStack.appendChild(section.section));
+
+  card.append(header, sectionStack);
   rowsBody.appendChild(card);
 
   priceTypeSelect.addEventListener("change", () => syncPriceState(card));
-  card.querySelector(".image-files")?.addEventListener("change", () => syncImageState(card));
-  startInput.addEventListener("change", () => syncRecurringState(card));
+  card.querySelector(".image-files")?.addEventListener("change", () => {
+    syncImageState(card);
+    refreshAccordionSummaries(card);
+  });
+  card.querySelector(".image-url")?.addEventListener("input", () => refreshAccordionSummaries(card));
+  startInput.addEventListener("change", () => {
+    syncRecurringState(card);
+    refreshAccordionSummaries(card);
+  });
+  endInput.addEventListener("change", () => refreshAccordionSummaries(card));
+  titleInput.addEventListener("input", () => refreshAccordionSummaries(card));
+  eventTypeSelect.addEventListener("change", () => refreshAccordionSummaries(card));
+  addressInput.addEventListener("input", () => refreshAccordionSummaries(card));
+  areaSelect.addEventListener("change", () => refreshAccordionSummaries(card));
+  priceTypeSelect.addEventListener("change", () => refreshAccordionSummaries(card));
+  priceMinInput.addEventListener("input", () => refreshAccordionSummaries(card));
+  priceMaxInput.addEventListener("input", () => refreshAccordionSummaries(card));
+  currencySelect.addEventListener("change", () => refreshAccordionSummaries(card));
+  ticketUrlInput.addEventListener("input", () => refreshAccordionSummaries(card));
   syncPriceState(card);
   syncImageState(card);
   syncLanguageState(card);
   syncRecurringState(card);
   syncLanguageLaunch(card);
   resetRecurringSummary(card);
+  syncAccordionCard(card);
   reindex();
 }
 
@@ -1281,6 +1489,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!pickerModal.hidden) closePickerModal(true);
   if (!descriptionModal.hidden) closeDescriptionModal(true);
+});
+
+window.addEventListener("resize", () => {
+  document.querySelectorAll(".public-submit-card").forEach((card) => syncAccordionCard(card));
 });
 
 submitAgainButton?.addEventListener("click", resetSubmitForm);

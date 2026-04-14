@@ -110,6 +110,11 @@ const uiStrings = {
 };
 
 const filterControls = document.getElementById("filter-controls");
+const mobileSearchSlot = document.getElementById("mobile-search-slot");
+const mobileFiltersButton = document.getElementById("mobile-filters-button");
+const mobileFilterModal = document.getElementById("mobile-filter-modal");
+const mobileFilterControls = document.getElementById("mobile-filter-controls");
+const mobileFiltersClose = document.getElementById("mobile-filters-close");
 const eventList = document.getElementById("event-list");
 const featuredGrid = document.getElementById("featured-grid");
 const featuredTitle = document.getElementById("featured-title");
@@ -125,6 +130,7 @@ const eventModal = document.getElementById("event-modal");
 const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
 const featuredColorCache = new Map();
+let filterInputRegistry = new Map();
 let featuredRotationTimer = null;
 let activeModalAnchor = null;
 
@@ -633,11 +639,47 @@ function addDays(date, days) {
   return result;
 }
 
-function createSelect(name, labelText, options, includeAny = true) {
+function registerFilterElement(name, element) {
+  if (!filterInputRegistry.has(name)) filterInputRegistry.set(name, []);
+  filterInputRegistry.get(name).push(element);
+}
+
+function setFilterValue(name, value) {
+  state.filters[name] = value;
+  syncFilterInputs();
+  render();
+}
+
+function activeMobileFilterCount() {
+  let count = 0;
+  if (state.filters.eventType) count += 1;
+  if (state.filters.area) count += 1;
+  if (state.filters.eventLanguage) count += 1;
+  if (state.filters.dateFrom) count += 1;
+  if (state.filters.dateTo) count += 1;
+  if (state.filters.sort && state.filters.sort !== "date_asc") count += 1;
+  return count;
+}
+
+function syncFilterInputs() {
+  filterInputRegistry.forEach((elements, name) => {
+    elements.forEach((element) => {
+      element.value = state.filters[name] || "";
+    });
+  });
+  if (mobileFiltersButton) {
+    const count = activeMobileFilterCount();
+    mobileFiltersButton.textContent = count ? `Filters (${count})` : "Filters";
+  }
+}
+
+function createSelect(name, labelText, options, includeAny = true, config = {}) {
   const wrap = document.createElement("div");
-  wrap.className = "control";
+  wrap.className = `control control-${name}`;
+  if (config.compact) wrap.classList.add("control-compact");
   const label = document.createElement("label");
   label.textContent = labelText;
+  if (config.hideLabel) label.classList.add("visually-hidden");
   const select = document.createElement("select");
   select.name = name;
   if (includeAny) {
@@ -665,42 +707,100 @@ function createSelect(name, labelText, options, includeAny = true) {
     select.appendChild(opt);
   });
   select.addEventListener("change", (event) => {
-    state.filters[name] = event.target.value;
-    render();
+    setFilterValue(name, event.target.value);
   });
+  registerFilterElement(name, select);
   wrap.append(label, select);
   return wrap;
 }
 
-function createInput(name, labelText, type = "text", placeholder = "") {
+function createInput(name, labelText, type = "text", placeholder = "", config = {}) {
   const wrap = document.createElement("div");
-  wrap.className = "control";
+  wrap.className = `control control-${name}`;
+  if (config.compact) wrap.classList.add("control-compact");
   const label = document.createElement("label");
   label.textContent = labelText;
+  if (config.hideLabel) label.classList.add("visually-hidden");
   const input = document.createElement("input");
   input.type = type;
   input.name = name;
   input.placeholder = placeholder;
-  input.addEventListener("input", (event) => {
-    state.filters[name] = event.target.value;
-    render();
+  input.addEventListener(type === "text" ? "input" : "change", (event) => {
+    setFilterValue(name, event.target.value);
   });
+  registerFilterElement(name, input);
   wrap.append(label, input);
   return wrap;
 }
 
+function createFilterDescriptors(strings) {
+  return [
+    {
+      name: "eventType",
+      render(config = {}) {
+        return createSelect("eventType", strings.filters.eventType, EVENT_TYPES.map((t) => ({ value: t, label: t })), true, config);
+      }
+    },
+    {
+      name: "area",
+      render(config = {}) {
+        return createSelect("area", strings.filters.area, AREA_GROUPS, true, config);
+      }
+    },
+    {
+      name: "eventLanguage",
+      render(config = {}) {
+        return createSelect("eventLanguage", strings.filters.eventLanguage, state.eventLanguageOptions.map((l) => ({ value: l.code, label: l.label })), true, config);
+      }
+    },
+    {
+      name: "dateFrom",
+      render(config = {}) {
+        return createInput("dateFrom", strings.filters.dateFrom, "date", "", config);
+      }
+    },
+    {
+      name: "dateTo",
+      render(config = {}) {
+        return createInput("dateTo", strings.filters.dateTo, "date", "", config);
+      }
+    },
+    {
+      name: "sort",
+      render(config = {}) {
+        return createSelect("sort", strings.filters.sort, Object.entries(strings.sortOptions).map(([value, label]) => ({ value, label })), false, config);
+      }
+    }
+  ];
+}
+
 function renderFilters() {
+  filterInputRegistry = new Map();
   filterControls.innerHTML = "";
+  if (mobileSearchSlot) mobileSearchSlot.innerHTML = "";
+  if (mobileFilterControls) mobileFilterControls.innerHTML = "";
   const strings = uiStrings[state.uiLang];
+  const searchPlaceholder = "Search titles and descriptions";
+  const filterDescriptors = createFilterDescriptors(strings);
+
   filterControls.append(
-    createInput("search", strings.filters.search, "text", "Search titles and descriptions"),
-    createSelect("eventType", strings.filters.eventType, EVENT_TYPES.map((t) => ({ value: t, label: t }))),
-    createSelect("area", strings.filters.area, AREA_GROUPS),
-    createSelect("eventLanguage", strings.filters.eventLanguage, state.eventLanguageOptions.map((l) => ({ value: l.code, label: l.label }))),
-    createInput("dateFrom", strings.filters.dateFrom, "date"),
-    createInput("dateTo", strings.filters.dateTo, "date"),
-    createSelect("sort", strings.filters.sort, Object.entries(strings.sortOptions).map(([value, label]) => ({ value, label })), false)
+    createInput("search", strings.filters.search, "text", searchPlaceholder),
+    ...filterDescriptors.map((descriptor) => descriptor.render())
   );
+
+  if (mobileSearchSlot) {
+    mobileSearchSlot.appendChild(
+      createInput("search", strings.filters.search, "text", searchPlaceholder, { hideLabel: true, compact: true })
+    );
+  }
+
+  if (mobileFilterControls) {
+    filterDescriptors.forEach((descriptor) => {
+      mobileFilterControls.appendChild(descriptor.render({ compact: true }));
+    });
+  }
+
+  syncFilterInputs();
 }
 
 function filterEvents() {
@@ -979,8 +1079,17 @@ function buildDayModalGroupMeta(events) {
   return meta;
 }
 
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 720px)").matches;
+}
+
 function getMonthCalendarMetrics(days, grouped) {
   const maxEvents = days.reduce((max, date) => Math.max(max, (grouped[toDateKey(date)] || []).length), 0);
+  if (isMobileViewport()) {
+    const visibleChipLimit = 1;
+    const cellHeight = Math.min(108, 72 + (maxEvents > 1 ? 14 : 0) + (maxEvents > 3 ? 10 : 0));
+    return { visibleChipLimit, cellHeight };
+  }
   const visibleChipLimit = Math.min(5, Math.max(3, maxEvents || 0));
   const cellHeight = Math.min(184, 96 + (visibleChipLimit - 3) * 26 + (maxEvents > visibleChipLimit ? 18 : 0));
   return {
@@ -1153,6 +1262,8 @@ function syncUiCopy() {
   document.getElementById("hero-subtitle").textContent = pickSetting("hero_subtitle", strings.subtitle);
   featuredTitle.textContent = pickSetting("featured_title", "Highlighted Events");
   resetFilters.textContent = strings.reset;
+  const mobileFilterTitle = document.getElementById("mobile-filter-title");
+  if (mobileFilterTitle) mobileFilterTitle.textContent = "Filters";
   const currentLang = UI_LANGS.find((lang) => lang.code === state.uiLang);
   languageButton.textContent = `Language: ${currentLang ? currentLang.label : "English"}`;
 }
@@ -1195,6 +1306,14 @@ resetFilters.addEventListener("click", () => {
   };
   renderFilters();
   render();
+});
+
+mobileFiltersButton?.addEventListener("click", () => {
+  mobileFilterModal?.classList.remove("hidden");
+});
+
+mobileFiltersClose?.addEventListener("click", () => {
+  mobileFilterModal?.classList.add("hidden");
 });
 
 viewControls.addEventListener("click", (event) => {
@@ -1249,12 +1368,31 @@ eventModal.addEventListener("click", (event) => {
     closeModal();
   }
 });
+mobileFilterModal?.addEventListener("click", (event) => {
+  if (event.target.dataset.closeMobileFilters === "true") {
+    mobileFilterModal.classList.add("hidden");
+  }
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !eventModal.classList.contains("hidden")) {
     closeModal();
   }
+  if (event.key === "Escape" && mobileFilterModal && !mobileFilterModal.classList.contains("hidden")) {
+    mobileFilterModal.classList.add("hidden");
+  }
 });
-window.addEventListener("resize", syncModalPlacement);
+let resizeRaf = null;
+window.addEventListener("resize", () => {
+  syncModalPlacement();
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    if (!isMobileViewport()) {
+      mobileFilterModal?.classList.add("hidden");
+    }
+    renderFilters();
+    render();
+  });
+});
 window.addEventListener("scroll", syncModalPlacement, { passive: true });
 
 syncUiCopy();

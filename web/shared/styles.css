@@ -112,6 +112,32 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
+.mobile-filter-bar {
+  display: none;
+}
+
+.mobile-search-slot {
+  min-width: 0;
+}
+
+.mobile-filter-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mobile-filter-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-filter-modal-header h2 {
+  margin: 0;
+  font-family: var(--font-title);
+}
+
 .hero-top {
   display: flex;
   justify-content: space-between;
@@ -273,6 +299,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.control-compact label,
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 label {
@@ -1096,6 +1135,65 @@ section {
   overflow-x: clip;
 }
 
+.public-submit-accordion-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.public-submit-accordion {
+  border: 1px solid rgba(224, 215, 198, 0.72);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.66);
+  overflow: hidden;
+}
+
+.public-submit-accordion-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  text-align: left;
+}
+
+.public-submit-accordion-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: none;
+}
+
+.public-submit-accordion-title {
+  font-weight: 700;
+}
+
+.public-submit-accordion-summary {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.public-submit-accordion-chevron {
+  color: var(--brand);
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.public-submit-accordion.is-open .public-submit-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.public-submit-accordion-panel {
+  padding: 0 14px 14px;
+}
+
+.public-submit-accordion-panel-full {
+  grid-template-columns: 1fr;
+}
+
 .public-submit-success {
   text-align: center;
 }
@@ -1128,6 +1226,10 @@ section {
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   align-items: stretch;
+}
+
+.public-submit-action-bar {
+  justify-content: flex-end;
 }
 
 .public-submit-field {
@@ -1408,6 +1510,32 @@ section {
   border-radius: 999px;
 }
 
+@media (min-width: 721px) {
+  .public-submit-accordion {
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .public-submit-accordion-toggle {
+    padding: 0 0 8px;
+    cursor: default;
+  }
+
+  .public-submit-accordion-toggle:hover {
+    background: transparent;
+    transform: none;
+  }
+
+  .public-submit-accordion-chevron {
+    display: none;
+  }
+
+  .public-submit-accordion-panel {
+    padding: 0 0 6px;
+  }
+}
+
 .status-pill {
   padding: 3px 8px;
   border-radius: 999px;
@@ -1449,23 +1577,25 @@ section {
 
 @media (max-width: 720px) {
   .app {
-    padding: 18px 14px 40px;
+    padding: 14px 12px 32px;
   }
 
   section {
-    margin-top: 18px;
+    margin-top: 14px;
   }
 
   .hero {
-    padding: 18px 16px;
+    padding: 16px 14px;
   }
 
   .hero h1 {
-    font-size: 30px;
+    font-size: 28px;
+    margin-bottom: 6px;
   }
 
   .hero p {
-    font-size: 15px;
+    font-size: 14px;
+    line-height: 1.4;
   }
 
   .controls,
@@ -1487,26 +1617,26 @@ section {
   .featured-box,
   .form-card,
   .calendar {
-    padding: 14px;
+    padding: 12px;
   }
 
   .featured-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
+    gap: 4px;
   }
 
   .featured-item {
-    min-height: 84px;
+    min-height: 78px;
   }
 
   .featured-poster-image,
   .featured-fallback,
   .featured-placeholder-image {
-    min-height: 84px;
+    min-height: 78px;
   }
 
   .featured-fallback {
-    padding: 6px;
+    padding: 4px;
   }
 
   .featured-fallback-title {
@@ -1514,8 +1644,9 @@ section {
   }
 
   .featured-item-caption {
-    font-size: 9px;
-    padding: 12px 4px 4px;
+    font-size: 8px;
+    padding: 9px 3px 3px;
+    line-height: 1.15;
   }
 
   .admin-bar {
@@ -1545,7 +1676,7 @@ section {
 
   .hero-top {
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .language-switcher,
@@ -1572,9 +1703,35 @@ section {
     min-width: 0;
   }
 
+  .mobile-filter-bar {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .mobile-search-slot .control {
+    height: 100%;
+  }
+
+  .mobile-search-slot input,
+  #mobile-filters-button {
+    min-height: 42px;
+  }
+
+  .controls {
+    display: none;
+  }
+
+  .mobile-filter-controls {
+    grid-template-columns: 1fr;
+  }
+
   .calendar-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
   .calendar-grid {
@@ -1587,54 +1744,139 @@ section {
   }
 
   .calendar-cell {
-    height: min(var(--calendar-cell-height, 96px), 168px);
-    padding: 6px;
+    height: min(var(--calendar-cell-height, 96px), 108px);
+    padding: 5px;
   }
 
   .calendar-date {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .calendar-chip {
     font-size: 10px;
-    padding: 2px 6px;
+    padding: 2px 5px;
   }
 
-  .calendar-week-scroll,
-  .table {
-    overflow-x: auto;
+  .calendar-week-scroll {
+    overflow-x: visible;
   }
 
   .calendar-week {
-    min-width: 700px;
+    min-width: 0;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .table {
     display: block;
     width: 100%;
+    overflow-x: auto;
   }
 
   .modal-content {
     left: 50%;
-    top: max(16px, min(var(--modal-anchor-top, 24px), 32px));
-    width: calc(100% - 24px);
+    width: calc(100% - 20px);
     max-height: 88vh;
     transform: translateX(-50%);
     margin: 0;
-    padding: 16px;
+    padding: 14px;
   }
 
   #event-modal {
-    padding: 0 12px 20px;
+    display: flex;
+    align-items: flex-end;
+    padding: 0;
   }
 
   #event-modal .modal-content {
     width: 100%;
-    margin: max(16px, min(var(--modal-anchor-top, 24px), 32px)) auto 20px;
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    margin: 0;
+    padding: 14px 14px 22px;
+  }
+
+  #mobile-filter-modal {
+    display: flex;
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  #mobile-filter-modal .mobile-filter-modal-content,
+  #description-modal .description-modal-content,
+  #picker-modal .picker-modal-content {
+    position: relative;
+    width: 100%;
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    margin: 0;
+    padding: 14px 14px 22px;
+    top: auto;
+    left: auto;
+    transform: none;
   }
 
   .description-editor {
     min-height: 240px;
+  }
+
+  .mobile-filter-modal-header .modal-close {
+    margin-left: 0;
+  }
+
+  #view-controls {
+    gap: 6px;
+  }
+
+  #view-controls .toggle-button {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .public-submit-card {
+    padding: 12px;
+  }
+
+  .public-submit-card-header {
+    margin-bottom: 8px;
+  }
+
+  .public-submit-accordion {
+    border-color: rgba(224, 215, 198, 0.84);
+    background: rgba(255, 255, 255, 0.78);
+  }
+
+  .public-submit-accordion-toggle {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .public-submit-accordion-summary {
+    grid-column: 1 / -1;
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .public-submit-accordion-panel {
+    padding: 0 12px 12px;
+  }
+
+  .public-submit-action-bar {
+    position: sticky;
+    bottom: 8px;
+    z-index: 4;
+    margin-top: 14px;
+    padding: 8px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 24px rgba(31, 26, 20, 0.12);
+    backdrop-filter: blur(10px);
+  }
+
+  .public-submit-action-bar button {
+    width: 100%;
   }
 
   .task-card {
@@ -1648,34 +1890,39 @@ section {
 
 @media (max-width: 480px) {
   .app {
-    padding: 14px 10px 28px;
+    padding: 12px 8px 24px;
   }
 
   .hero h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .featured-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
+    gap: 3px;
   }
 
   .featured-item {
-    min-height: 72px;
+    min-height: 66px;
   }
 
   .featured-poster-image,
   .featured-fallback,
   .featured-placeholder-image {
-    min-height: 72px;
+    min-height: 66px;
   }
 
   .featured-fallback {
-    padding: 5px;
+    padding: 4px;
   }
 
   .featured-fallback-title {
     font-size: 9px;
+  }
+
+  .featured-item-caption {
+    font-size: 7px;
+    padding: 8px 2px 2px;
   }
 
   .calendar-grid {
@@ -1683,7 +1930,7 @@ section {
   }
 
   .calendar-cell {
-    min-height: 68px;
+    height: min(var(--calendar-cell-height, 96px), 98px);
     padding: 5px;
   }
 
@@ -1691,7 +1938,24 @@ section {
     gap: 3px;
   }
 
+  .calendar-chip {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
+
   .badge {
     justify-content: center;
+  }
+
+  .mobile-filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-submit-accordion-toggle {
+    padding: 9px 10px;
+  }
+
+  .public-submit-accordion-panel {
+    padding: 0 10px 10px;
   }
 }
