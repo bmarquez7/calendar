@@ -1673,6 +1673,12 @@ section {
     line-height: 1.4;
   }
 
+  .widget-page .hero p,
+  .submit-page .hero p {
+    font-size: 13px;
+    line-height: 1.38;
+  }
+
   .widget-hero .hero-top {
     margin-bottom: 10px;
     gap: 10px;
@@ -1740,8 +1746,9 @@ section {
 
   .featured-item-caption {
     font-size: 8px;
-    padding: 9px 3px 3px;
+    padding: 8px 3px 3px;
     line-height: 1.15;
+    letter-spacing: 0.03em;
   }
 
   .admin-bar {
@@ -1769,6 +1776,9 @@ section {
     flex: 1 1 auto;
     justify-content: flex-start;
     min-width: 0;
+    min-height: 36px;
+    padding: 5px 10px;
+    font-size: 11px;
   }
 
   .widget-summary-bar #reset-filters {
@@ -1782,6 +1792,11 @@ section {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
+  }
+
+  .widget-view-bar .toggle-button {
+    min-height: 38px;
+    border-radius: 12px;
   }
 
   .admin-queue-toolbar {
@@ -1822,6 +1837,14 @@ section {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .widget-hero .hero-actions .button-link,
+  .widget-hero .language-switcher > button {
+    min-height: 40px;
+    padding: 9px 10px;
+    font-size: 12px;
+    border-radius: 12px;
+  }
+
   .hero-actions .button-link,
   .hero-actions button,
   .language-switcher > button,
@@ -1852,12 +1875,16 @@ section {
   .mobile-search-slot input,
   #mobile-filters-button {
     min-height: 42px;
+    border-radius: 12px;
+    padding: 9px 11px;
+    font-size: 12px;
   }
 
   .mobile-filter-panel:not(.hidden) {
     margin-top: 8px;
     padding: 10px;
     border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(31, 26, 20, 0.06);
   }
 
   .controls {
@@ -1866,6 +1893,7 @@ section {
 
   .mobile-filter-controls {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .calendar-header {
@@ -1894,13 +1922,14 @@ section {
   }
 
   .calendar-day {
-    font-size: 10px;
+    font-size: 9px;
     text-align: center;
   }
 
   .calendar-cell {
     height: min(var(--calendar-cell-height, 96px), 108px);
-    padding: 5px;
+    padding: 4px;
+    border-radius: 9px;
   }
 
   .calendar-date {
@@ -1908,8 +1937,8 @@ section {
   }
 
   .calendar-chip {
-    font-size: 10px;
-    padding: 2px 5px;
+    font-size: 9px;
+    padding: 2px 4px;
     border-radius: 8px;
   }
 
@@ -2019,6 +2048,10 @@ section {
     font-size: 12px;
   }
 
+  .card .meta span {
+    line-height: 1.3;
+  }
+
   .public-submit-card {
     padding: 10px;
     border-radius: 16px;
@@ -2060,6 +2093,9 @@ section {
 
   .public-submit-toolbar .badge {
     justify-content: flex-start;
+    min-height: 36px;
+    padding: 5px 10px;
+    font-size: 11px;
   }
 
   .public-submit-toolbar-actions {
@@ -2137,6 +2173,7 @@ section {
 
   .public-submit-launch {
     padding: 9px 11px;
+    border-radius: 11px;
   }
 
   .public-submit-help-text,
@@ -2154,7 +2191,7 @@ section {
     bottom: 8px;
     z-index: 4;
     margin-top: 14px;
-    padding: 8px;
+    padding: 7px;
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid var(--border);
@@ -2164,6 +2201,8 @@ section {
 
   .public-submit-action-bar button {
     width: 100%;
+    min-height: 42px;
+    border-radius: 12px;
   }
 
   .public-submit-success .admin-bar {
@@ -2275,6 +2314,7 @@ section {
   .widget-view-bar .toggle-button {
     padding: 8px 6px;
     font-size: 12px;
+    min-height: 36px;
   }
 
   .featured-box h3 {
@@ -2291,6 +2331,24 @@ section {
 
   .card h3 {
     font-size: 22px;
+  }
+
+  .widget-page .hero p,
+  .submit-page .hero p {
+    font-size: 12px;
+  }
+
+  .mobile-search-slot input,
+  #mobile-filters-button,
+  .widget-hero .hero-actions .button-link,
+  .widget-hero .language-switcher > button {
+    min-height: 38px;
+    font-size: 11px;
+  }
+
+  .widget-summary-bar .badge,
+  .public-submit-toolbar .badge {
+    font-size: 10.5px;
   }
 
   .public-submit-toolbar-actions {
