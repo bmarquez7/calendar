@@ -31,7 +31,16 @@
         </p>
         <div class="mobile-filter-bar" id="mobile-filter-bar">
           <div id="mobile-search-slot" class="mobile-search-slot"></div>
-          <button type="button" class="secondary" id="mobile-filters-button">Filters</button>
+          <button
+            type="button"
+            class="secondary"
+            id="mobile-filters-button"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="mobile-filter-modal"
+          >
+            Filters
+          </button>
         </div>
         <div class="controls" id="filter-controls"></div>
         <div class="featured-box">
