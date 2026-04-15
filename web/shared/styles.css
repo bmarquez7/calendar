@@ -35,6 +35,10 @@ body {
     var(--bg);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .app {
   max-width: 1100px;
   margin: 0 auto;
@@ -815,6 +819,11 @@ section {
   background: rgba(17, 25, 40, 0.72);
   color: #fff;
   font-size: 12px;
+}
+
+.modal-day-list {
+  display: grid;
+  gap: 8px;
 }
 
 .table {
@@ -1722,31 +1731,44 @@ section {
   }
 
   .featured-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    grid-template-columns: none;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .featured-grid::-webkit-scrollbar {
+    display: none;
   }
 
   .featured-item {
-    min-height: 78px;
+    min-height: 180px;
+    scroll-snap-align: start;
   }
 
   .featured-poster-image,
   .featured-fallback,
   .featured-placeholder-image {
-    min-height: 78px;
+    min-height: 180px;
   }
 
   .featured-fallback {
-    padding: 4px;
+    padding: 10px;
   }
 
   .featured-fallback-title {
-    font-size: 10px;
+    font-size: 13px;
   }
 
   .featured-item-caption {
-    font-size: 8px;
-    padding: 8px 3px 3px;
+    font-size: 11px;
+    padding: 12px 8px 6px;
     line-height: 1.15;
     letter-spacing: 0.03em;
   }
@@ -1968,17 +1990,22 @@ section {
   }
 
   #event-modal {
-    display: flex;
-    align-items: flex-end;
-    padding: 0;
+    display: block;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 0 8px 18px;
   }
 
   #event-modal .modal-content {
-    width: 100%;
+    position: relative;
+    width: calc(100% - 8px);
     max-width: none;
-    border-radius: 20px 20px 0 0;
-    margin: 0;
-    padding: 14px 14px 22px;
+    border-radius: 18px;
+    margin: var(--modal-anchor-top, 12px) auto 18px;
+    max-height: none;
+    overflow: visible;
+    padding: 14px 14px 18px;
   }
 
   #event-modal .modal-close {
@@ -1996,6 +2023,10 @@ section {
   .modal-event {
     padding: 10px;
     margin-top: 8px;
+  }
+
+  .modal-day-list {
+    gap: 10px;
   }
 
   #description-modal .description-modal-content,
@@ -2241,31 +2272,30 @@ section {
   }
 
   .featured-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 3px;
+    gap: 6px;
   }
 
   .featured-item {
-    min-height: 66px;
+    min-height: 160px;
   }
 
   .featured-poster-image,
   .featured-fallback,
   .featured-placeholder-image {
-    min-height: 66px;
+    min-height: 160px;
   }
 
   .featured-fallback {
-    padding: 4px;
+    padding: 10px;
   }
 
   .featured-fallback-title {
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .featured-item-caption {
-    font-size: 7px;
-    padding: 8px 2px 2px;
+    font-size: 10px;
+    padding: 12px 6px 6px;
   }
 
   .calendar-grid {
@@ -2331,6 +2361,16 @@ section {
 
   .card h3 {
     font-size: 22px;
+  }
+
+  #event-modal {
+    padding: 0 6px 14px;
+  }
+
+  #event-modal .modal-content {
+    width: calc(100% - 4px);
+    margin-bottom: 14px;
+    padding: 12px 12px 16px;
   }
 
   .widget-page .hero p,

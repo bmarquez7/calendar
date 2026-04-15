@@ -17,6 +17,7 @@ const FEATURED_FIXED_COUNT = 5;
 const FEATURED_TOTAL_COUNT = 10;
 const FEATURED_ROTATE_COUNT = FEATURED_TOTAL_COUNT - FEATURED_FIXED_COUNT;
 const FEATURED_ROTATION_MS = 45_000;
+const MOBILE_FEATURED_SCROLL_MS = 5_500;
 
 const state = {
   events: [],
@@ -131,7 +132,9 @@ const modalClose = document.getElementById("modal-close");
 const featuredColorCache = new Map();
 let filterInputRegistry = new Map();
 let featuredRotationTimer = null;
+let mobileFeaturedCarouselTimer = null;
 let activeModalAnchor = null;
+let activeModalAnchorRect = null;
 
 state.weekStart = startOfWeek(new Date());
 
@@ -369,14 +372,17 @@ function linkifyText(value) {
 function syncModalPlacement() {
   if (eventModal.classList.contains("hidden")) return;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-  const defaultTop = Math.max(20, Math.round(viewportHeight * 0.08));
+  const mobileViewport = window.innerWidth <= 720;
+  const defaultTop = mobileViewport ? 12 : Math.max(20, Math.round(viewportHeight * 0.08));
   let nextTop = defaultTop;
 
-  if (activeModalAnchor && window.innerWidth > 720) {
-    const rect = activeModalAnchor.getBoundingClientRect();
-    const preferredTop = Math.round(rect.top + 12);
-    const maxTop = Math.max(24, viewportHeight - 320);
-    nextTop = Math.min(Math.max(24, preferredTop), maxTop);
+  const rect = activeModalAnchorRect || (activeModalAnchor ? activeModalAnchor.getBoundingClientRect() : null);
+  if (rect) {
+    const preferredTop = Math.round(rect.top + (mobileViewport ? 8 : 12));
+    const maxTop = mobileViewport
+      ? Math.max(16, viewportHeight - 220)
+      : Math.max(24, viewportHeight - 320);
+    nextTop = Math.min(Math.max(mobileViewport ? 12 : 24, preferredTop), maxTop);
   }
 
   eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
@@ -386,9 +392,14 @@ function openModal(content, options = {}) {
   const html = typeof content === "string" ? content : content?.html || "";
   if (options.anchorEl) {
     activeModalAnchor = options.anchorEl;
+    activeModalAnchorRect = null;
+  } else if (options.anchorRect) {
+    activeModalAnchor = null;
+    activeModalAnchorRect = options.anchorRect;
   }
   modalBody.innerHTML = html;
   eventModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
   syncModalPlacement();
   if (content && typeof content.onOpen === "function") {
     content.onOpen();
@@ -399,7 +410,9 @@ function closeModal() {
   eventModal.classList.add("hidden");
   modalBody.innerHTML = "";
   activeModalAnchor = null;
+  activeModalAnchorRect = null;
   eventModal.style.removeProperty("--modal-anchor-top");
+  document.body.classList.remove("modal-open");
 }
 
 function buildModalGallery(images, title) {
@@ -489,9 +502,9 @@ function eventDetailHtml(event) {
   };
 }
 
-function openDayModal(date, events) {
+function openDayModal(date, events, anchorEl = null) {
   const dayLabel = date.toLocaleDateString(state.uiLang, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-  const calendarAnchor = calendarView.querySelector(".calendar") || calendarView;
+  const calendarAnchor = anchorEl || activeModalAnchor || calendarView.querySelector(".calendar") || calendarView;
   if (!events.length) {
     openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3><p>No events for this day.</p>`, { anchorEl: calendarAnchor });
     return;
@@ -529,11 +542,11 @@ function openDayModal(date, events) {
     )
     .join("");
 
-  openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3>${items}`, { anchorEl: calendarAnchor });
+  openModal(`<h3 id="modal-title">${escapeHtml(dayLabel)}</h3><div class="modal-day-list">${items}</div>`, { anchorEl: calendarAnchor });
   modalBody.querySelectorAll(".modal-event").forEach((el) => {
     el.addEventListener("click", () => {
       const target = sortedEvents.find((evt) => String(evt.id) === el.dataset.eventId);
-      if (target) openModal(eventDetailHtml(target), { anchorEl: calendarAnchor });
+      if (target) openModal(eventDetailHtml(target), { anchorRect: el.getBoundingClientRect() });
     });
   });
 }
@@ -903,6 +916,60 @@ function ensureFeaturedRotation() {
   }
 }
 
+function stopMobileFeaturedCarousel() {
+  if (mobileFeaturedCarouselTimer) {
+    clearInterval(mobileFeaturedCarouselTimer);
+    mobileFeaturedCarouselTimer = null;
+  }
+  if (featuredGrid) {
+    featuredGrid.onscroll = null;
+  }
+}
+
+function syncMobileFeaturedCarousel() {
+  stopMobileFeaturedCarousel();
+  if (!featuredGrid || !isMobileViewport()) return;
+
+  const items = Array.from(featuredGrid.querySelectorAll(".featured-item"));
+  if (items.length <= 1) return;
+
+  let index = Number(featuredGrid.dataset.mobileFeaturedIndex || 0);
+  if (!Number.isFinite(index) || index < 0 || index >= items.length) {
+    index = 0;
+  }
+
+  const updateIndexFromScroll = () => {
+    const left = featuredGrid.scrollLeft;
+    let nearestIndex = index;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    items.forEach((item, itemIndex) => {
+      const distance = Math.abs(item.offsetLeft - left);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = itemIndex;
+      }
+    });
+    index = nearestIndex;
+    featuredGrid.dataset.mobileFeaturedIndex = String(nearestIndex);
+  };
+
+  const scrollToIndex = (nextIndex) => {
+    const target = items[nextIndex];
+    if (!target) return;
+    featuredGrid.dataset.mobileFeaturedIndex = String(nextIndex);
+    featuredGrid.scrollTo({
+      left: target.offsetLeft,
+      behavior: "smooth"
+    });
+  };
+
+  featuredGrid.onscroll = updateIndexFromScroll;
+  mobileFeaturedCarouselTimer = window.setInterval(() => {
+    index = (index + 1) % items.length;
+    scrollToIndex(index);
+  }, MOBILE_FEATURED_SCROLL_MS);
+}
+
 function renderEvents() {
   const events = filterEvents();
   eventList.innerHTML = "";
@@ -985,7 +1052,7 @@ function renderEvents() {
     } else {
       card.append(title, desc, meta, actions);
     }
-    card.addEventListener("click", () => openModal(eventDetailHtml(event)));
+    card.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: card }));
     eventList.appendChild(card);
   });
 }
@@ -997,7 +1064,11 @@ function renderFeatured() {
 
   featuredGrid.innerHTML = "";
   const list = [...items];
-  while (list.length < FEATURED_TOTAL_COUNT) {
+  if (!isMobileViewport()) {
+    while (list.length < FEATURED_TOTAL_COUNT) {
+      list.push(null);
+    }
+  } else if (!list.length) {
     list.push(null);
   }
 
@@ -1040,9 +1111,11 @@ function renderFeatured() {
       box.classList.add("featured-item-no-image");
       box.innerHTML = `<div class="featured-fallback"><span class="featured-fallback-title">${escapeHtml(eventTitle)}</span></div>`;
     }
-    box.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: featuredBox }));
+    box.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: box }));
     featuredGrid.appendChild(box);
   });
+
+  syncMobileFeaturedCarousel();
 }
 
 function groupEventsByDate(events) {
@@ -1182,7 +1255,7 @@ function renderCalendarMonth(events) {
       more.textContent = `+${items.length - visibleChipLimit} more`;
       eventsWrap.appendChild(more);
     }
-    cell.addEventListener("click", () => openDayModal(date, items));
+    cell.addEventListener("click", () => openDayModal(date, items, cell));
     cell.append(dateLabel, eventsWrap);
     grid.appendChild(cell);
   });
@@ -1241,7 +1314,7 @@ function renderCalendarWeek(events) {
       chip.textContent = pickText(event, "title");
       eventsWrap.appendChild(chip);
     });
-    day.addEventListener("click", () => openDayModal(date, grouped[key] || []));
+    day.addEventListener("click", () => openDayModal(date, grouped[key] || [], day));
     day.append(label, eventsWrap);
     grid.appendChild(day);
   }
