@@ -18,6 +18,229 @@ const FEATURED_TOTAL_COUNT = 10;
 const FEATURED_ROTATE_COUNT = FEATURED_TOTAL_COUNT - FEATURED_FIXED_COUNT;
 const FEATURED_ROTATION_MS = 45_000;
 const MOBILE_FEATURED_SCROLL_MS = 5_500;
+const HOLIDAY_YEAR_LOOKBACK = 0;
+const HOLIDAY_YEAR_LOOKAHEAD = 1;
+const TIRANA_TIMEZONE = "Europe/Tirane";
+
+const HOLIDAY_PALETTES = {
+  civic: {
+    cellBg: "rgba(109, 154, 216, 0.18)",
+    cellBorder: "rgba(109, 154, 216, 0.42)",
+    chipBg: "rgba(236, 245, 255, 0.96)",
+    chipInk: "#295e97"
+  },
+  christian: {
+    cellBg: "rgba(211, 116, 116, 0.18)",
+    cellBorder: "rgba(211, 116, 116, 0.42)",
+    chipBg: "rgba(255, 241, 241, 0.96)",
+    chipInk: "#9b3434"
+  },
+  muslim: {
+    cellBg: "rgba(122, 177, 116, 0.2)",
+    cellBorder: "rgba(122, 177, 116, 0.4)",
+    chipBg: "rgba(239, 248, 235, 0.96)",
+    chipInk: "#3c7540"
+  }
+};
+
+const INTERNATIONAL_HOLIDAYS = [
+  {
+    key: "valentines-day",
+    month: 2,
+    day: 14,
+    title_en: "Valentine's Day",
+    title_sq: "Dita e Shën Valentinit",
+    description_en: "Widely celebrated international holiday.",
+    description_sq: "Festë ndërkombëtare e njohur gjerësisht."
+  },
+  {
+    key: "international-womens-day",
+    month: 3,
+    day: 8,
+    title_en: "International Women's Day",
+    title_sq: "Dita Ndërkombëtare e Gruas",
+    description_en: "Major international observance.",
+    description_sq: "Ditë e rëndësishme ndërkombëtare."
+  },
+  {
+    key: "earth-day",
+    month: 4,
+    day: 22,
+    title_en: "Earth Day",
+    title_sq: "Dita e Tokës",
+    description_en: "International day focused on environmental awareness.",
+    description_sq: "Ditë ndërkombëtare e përkushtuar ndërgjegjësimit mjedisor."
+  },
+  {
+    key: "international-childrens-day",
+    month: 6,
+    day: 1,
+    title_en: "International Children's Day",
+    title_sq: "Dita Ndërkombëtare e Fëmijëve",
+    description_en: "International celebration of children and families.",
+    description_sq: "Festë ndërkombëtare kushtuar fëmijëve dhe familjeve."
+  },
+  {
+    key: "international-youth-day",
+    month: 8,
+    day: 12,
+    title_en: "International Youth Day",
+    title_sq: "Dita Ndërkombëtare e Rinisë",
+    description_en: "International observance celebrating young people.",
+    description_sq: "Ditë ndërkombëtare që feston të rinjtë."
+  },
+  {
+    key: "international-day-of-peace",
+    month: 9,
+    day: 21,
+    title_en: "International Day of Peace",
+    title_sq: "Dita Ndërkombëtare e Paqes",
+    description_en: "International observance promoting peace.",
+    description_sq: "Ditë ndërkombëtare që promovon paqen."
+  },
+  {
+    key: "halloween",
+    month: 10,
+    day: 31,
+    title_en: "Halloween",
+    title_sq: "Halloween",
+    description_en: "Internationally recognized autumn celebration.",
+    description_sq: "Festë vjeshte e njohur ndërkombëtarisht."
+  },
+  {
+    key: "international-volunteer-day",
+    month: 12,
+    day: 5,
+    title_en: "International Volunteer Day",
+    title_sq: "Dita Ndërkombëtare e Vullnetarizmit",
+    description_en: "International day recognizing volunteers and community work.",
+    description_sq: "Ditë ndërkombëtare që vlerëson vullnetarët dhe punën komunitare."
+  },
+  {
+    key: "human-rights-day",
+    month: 12,
+    day: 10,
+    title_en: "Human Rights Day",
+    title_sq: "Dita e të Drejtave të Njeriut",
+    description_en: "International observance centered on human rights.",
+    description_sq: "Ditë ndërkombëtare e përqendruar te të drejtat e njeriut."
+  }
+];
+
+const BANK_HOLIDAY_DEFINITIONS = [
+  {
+    key: "new-years-day",
+    month: 1,
+    day: 1,
+    title_en: "New Year's Day",
+    title_sq: "Viti i Ri",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "new-year-holiday",
+    month: 1,
+    day: 2,
+    title_en: "New Year Holiday",
+    title_sq: "Pushimi i Vitit të Ri",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "summer-day",
+    month: 3,
+    day: 14,
+    title_en: "Summer Day",
+    title_sq: "Dita e Verës",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "nevruz-day",
+    month: 3,
+    day: 22,
+    title_en: "Nevruz Day",
+    title_sq: "Dita e Nevruzit",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "muslim"
+  },
+  {
+    key: "labour-day",
+    month: 5,
+    day: 1,
+    title_en: "Labour Day",
+    title_sq: "Dita e Punëtorëve",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "saint-teresa-canonisation-day",
+    month: 9,
+    day: 5,
+    title_en: "Saint Teresa Canonisation Day",
+    title_sq: "Dita e Shenjtërimit të Nënë Terezës",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "christian"
+  },
+  {
+    key: "alphabet-day",
+    month: 11,
+    day: 22,
+    title_en: "Alphabet Day",
+    title_sq: "Dita e Alfabetit",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "flag-and-independence-day",
+    month: 11,
+    day: 28,
+    title_en: "Flag and Independence Day",
+    title_sq: "Dita e Flamurit dhe e Pavarësisë",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "liberation-day",
+    month: 11,
+    day: 29,
+    title_en: "Liberation Day",
+    title_sq: "Dita e Çlirimit",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "national-youth-day",
+    month: 12,
+    day: 8,
+    title_en: "National Youth Day",
+    title_sq: "Dita Kombëtare e Rinisë",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "civic"
+  },
+  {
+    key: "christmas-day",
+    month: 12,
+    day: 25,
+    title_en: "Christmas Day",
+    title_sq: "Krishtlindjet",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    palette: "christian"
+  }
+];
+
+const holidayEventCache = new Map();
 
 const state = {
   events: [],
@@ -177,10 +400,16 @@ function applyTheme() {
   }
 }
 
-function formatDateRange(start, end) {
+function formatDateRange(start, end, allDay = false) {
   const startDate = start ? new Date(start) : null;
   const endDate = end ? new Date(end) : null;
   if (!startDate) return "";
+  if (allDay) {
+    const startLabel = startDate.toLocaleDateString(state.uiLang, { dateStyle: "medium" });
+    if (!endDate || toDateKey(startDate) === toDateKey(endDate)) return startLabel;
+    const endLabel = endDate.toLocaleDateString(state.uiLang, { dateStyle: "medium" });
+    return `${startLabel} → ${endLabel}`;
+  }
   const datePart = startDate.toLocaleDateString(state.uiLang, { dateStyle: "medium" });
   const timePart = startDate.toLocaleTimeString(state.uiLang, { timeStyle: "short" });
   if (!endDate) return `${datePart} · ${timePart}`;
@@ -216,6 +445,339 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function slugifyHolidayKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function parseDateKey(dateKey) {
+  const [year, month, day] = String(dateKey || "").split("-").map((part) => Number(part));
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function buildAllDayRange(date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+    dayKey: toDateKey(start)
+  };
+}
+
+function easterSundayGregorian(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function orthodoxEasterSunday(year) {
+  const a = year % 4;
+  const b = year % 7;
+  const c = year % 19;
+  const d = (19 * c + 15) % 30;
+  const e = (2 * a + 4 * b - d + 34) % 7;
+  const month = Math.floor((d + e + 114) / 31);
+  const day = ((d + e + 114) % 31) + 1;
+  const julianDate = new Date(Date.UTC(year, month - 1, day));
+  julianDate.setUTCDate(julianDate.getUTCDate() + 13);
+  return new Date(julianDate.getUTCFullYear(), julianDate.getUTCMonth(), julianDate.getUTCDate(), 0, 0, 0, 0);
+}
+
+function getIslamicCalendarFormatter() {
+  const options = {
+    timeZone: TIRANA_TIMEZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric"
+  };
+  try {
+    return new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", options);
+  } catch {
+    return new Intl.DateTimeFormat("en-u-ca-islamic", options);
+  }
+}
+
+function getIslamicDateParts(date, formatter = getIslamicCalendarFormatter()) {
+  const parts = formatter.formatToParts(date);
+  return {
+    month: Number(parts.find((part) => part.type === "month")?.value || 0),
+    day: Number(parts.find((part) => part.type === "day")?.value || 0)
+  };
+}
+
+function findIslamicHolidayDate(year, month, day) {
+  const formatter = getIslamicCalendarFormatter();
+  const start = new Date(year, 0, 1, 12, 0, 0, 0);
+  const cursor = new Date(start);
+  for (let step = 0; step < 367; step += 1) {
+    const dateParts = getIslamicDateParts(cursor, formatter);
+    if (dateParts.month === month && dateParts.day === day) {
+      const tiranaDateKey = dateKeyInTirana(cursor);
+      return parseDateKey(tiranaDateKey);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return null;
+}
+
+function createHolidayEvent({
+  year,
+  key,
+  title_en,
+  title_sq,
+  description_en,
+  description_sq,
+  date,
+  category,
+  bankHoliday = false,
+  observed = false,
+  palette = "civic"
+}) {
+  const paletteValues = HOLIDAY_PALETTES[palette] || HOLIDAY_PALETTES.civic;
+  const { start, end, dayKey } = buildAllDayRange(date);
+  return {
+    id: `system-holiday:${year}:${slugifyHolidayKey(key)}`,
+    status: "approved",
+    title_en,
+    title_es: title_en,
+    title_sq,
+    description_en,
+    description_es: description_en,
+    description_sq,
+    location_en: "Nationwide",
+    location_es: "Todo el país",
+    location_sq: "Mbarë Shqipërinë",
+    event_type: "Holiday",
+    area: "",
+    event_language: ["en", "sq"],
+    date_start: start,
+    date_end: end,
+    all_day: true,
+    price_type: "Free",
+    price_min: null,
+    price_max: null,
+    currency: "ALL",
+    ticket_url: "",
+    event_image_url: "",
+    event_image_urls: [],
+    source_url: "",
+    created_at: start,
+    updated_at: start,
+    is_system_holiday: true,
+    is_bank_holiday: bankHoliday,
+    holiday_category: category,
+    holiday_observed: observed,
+    holiday_day_key: dayKey,
+    holiday_cell_bg: paletteValues.cellBg,
+    holiday_cell_border: paletteValues.cellBorder,
+    holiday_chip_bg: paletteValues.chipBg,
+    holiday_chip_ink: paletteValues.chipInk,
+    feature_blocked: true
+  };
+}
+
+function buildObservedBankHoliday(event, date) {
+  const originalTitleSq = event.title_sq || event.title_en;
+  return createHolidayEvent({
+    year: date.getFullYear(),
+    key: `${event.id}-observed-${toDateKey(date)}`,
+    title_en: `Observed bank holiday for ${event.title_en}`,
+    title_sq: `Pushim bankar i zhvendosur për ${originalTitleSq}`,
+    description_en: `${event.title_en} falls on a weekend, so Albanian banks observe the closure on the next working day.`,
+    description_sq: `${originalTitleSq} bie në fundjavë, ndaj bankat në Shqipëri e zbatojnë pushimin në ditën e ardhshme të punës.`,
+    date,
+    category: "bank",
+    bankHoliday: true,
+    observed: true,
+    palette: event.holiday_category === "religious-muslim"
+      ? "muslim"
+      : event.holiday_category === "religious-christian"
+        ? "christian"
+        : "civic"
+  });
+}
+
+function getObservedBankHolidays(events) {
+  const actualBankHolidays = events
+    .filter((event) => event.is_bank_holiday && !event.holiday_observed)
+    .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
+  const occupiedKeys = new Set(actualBankHolidays.map((event) => event.holiday_day_key));
+  const observed = [];
+
+  actualBankHolidays.forEach((event) => {
+    const date = parseDateKey(event.holiday_day_key);
+    if (!date) return;
+    const weekday = date.getDay();
+    if (weekday !== 0 && weekday !== 6) return;
+
+    let candidate = addDays(date, 1);
+    while (candidate.getDay() === 0 || candidate.getDay() === 6 || occupiedKeys.has(toDateKey(candidate))) {
+      candidate = addDays(candidate, 1);
+    }
+    const candidateKey = toDateKey(candidate);
+    occupiedKeys.add(candidateKey);
+    observed.push(buildObservedBankHoliday(event, candidate));
+  });
+
+  return observed;
+}
+
+function createFixedHolidayEvents(year, definitions, category, bankHoliday = false) {
+  return definitions.map((definition) => createHolidayEvent({
+    year,
+    key: definition.key,
+    title_en: definition.title_en,
+    title_sq: definition.title_sq,
+    description_en: definition.description_en,
+    description_sq: definition.description_sq,
+    date: new Date(year, definition.month - 1, definition.day, 0, 0, 0, 0),
+    category,
+    bankHoliday,
+    palette: definition.palette || "civic"
+  }));
+}
+
+function createFloatingHolidayEvents(year) {
+  const events = [];
+  const catholicEaster = easterSundayGregorian(year);
+  const orthodoxEaster = orthodoxEasterSunday(year);
+  const eidAlFitr = findIslamicHolidayDate(year, 10, 1);
+  const eidAlAdha = findIslamicHolidayDate(year, 12, 10);
+
+  events.push(createHolidayEvent({
+    year,
+    key: "orthodox-christmas",
+    title_en: "Orthodox Christmas",
+    title_sq: "Krishtlindjet Ortodokse",
+    description_en: "Major religious holiday observed by Orthodox communities.",
+    description_sq: "Festë e rëndësishme fetare e kremtuar nga komunitetet ortodokse.",
+    date: new Date(year, 0, 7, 0, 0, 0, 0),
+    category: "religious-christian",
+    palette: "christian"
+  }));
+
+  events.push(createHolidayEvent({
+    year,
+    key: "catholic-easter",
+    title_en: "Catholic Easter",
+    title_sq: "Pashkët Katolike",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    date: catholicEaster,
+    category: "religious-christian",
+    bankHoliday: true,
+    palette: "christian"
+  }));
+
+  events.push(createHolidayEvent({
+    year,
+    key: "orthodox-easter",
+    title_en: "Orthodox Easter",
+    title_sq: "Pashkët Ortodokse",
+    description_en: "Official bank holiday in Albania.",
+    description_sq: "Pushim zyrtar bankar në Shqipëri.",
+    date: orthodoxEaster,
+    category: "religious-christian",
+    bankHoliday: true,
+    palette: "christian"
+  }));
+
+  if (eidAlFitr) {
+    events.push(createHolidayEvent({
+      year,
+      key: "eid-al-fitr",
+      title_en: "Eid al-Fitr",
+      title_sq: "Fitër Bajrami",
+      description_en: "Official bank holiday in Albania.",
+      description_sq: "Pushim zyrtar bankar në Shqipëri.",
+      date: eidAlFitr,
+      category: "religious-muslim",
+      bankHoliday: true,
+      palette: "muslim"
+    }));
+  }
+
+  if (eidAlAdha) {
+    events.push(createHolidayEvent({
+      year,
+      key: "eid-al-adha",
+      title_en: "Eid al-Adha",
+      title_sq: "Kurban Bajrami",
+      description_en: "Official bank holiday in Albania.",
+      description_sq: "Pushim zyrtar bankar në Shqipëri.",
+      date: eidAlAdha,
+      category: "religious-muslim",
+      bankHoliday: true,
+      palette: "muslim"
+    }));
+  }
+
+  return events;
+}
+
+function getHolidayYearsForDisplay() {
+  const years = new Set();
+  const nowYear = new Date().getFullYear();
+  for (let year = nowYear - HOLIDAY_YEAR_LOOKBACK; year <= nowYear + HOLIDAY_YEAR_LOOKAHEAD; year += 1) {
+    years.add(year);
+  }
+
+  years.add(state.calendarDate.getFullYear());
+  years.add(state.weekStart.getFullYear());
+  years.add(addDays(state.weekStart, 6).getFullYear());
+
+  [state.filters.dateFrom, state.filters.dateTo].forEach((value) => {
+    if (!value) return;
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) years.add(date.getFullYear());
+  });
+
+  return [...years].sort((a, b) => a - b);
+}
+
+function generateHolidayEventsForYear(year) {
+  if (holidayEventCache.has(year)) {
+    return holidayEventCache.get(year);
+  }
+
+  const bankHolidays = createFixedHolidayEvents(year, BANK_HOLIDAY_DEFINITIONS, "bank", true);
+  const internationalHolidays = createFixedHolidayEvents(year, INTERNATIONAL_HOLIDAYS, "international", false);
+  const floatingHolidays = createFloatingHolidayEvents(year);
+  const observedBankHolidays = getObservedBankHolidays([...bankHolidays, ...floatingHolidays]);
+  const events = [...bankHolidays, ...floatingHolidays, ...observedBankHolidays, ...internationalHolidays]
+    .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
+
+  holidayEventCache.set(year, events);
+  return events;
+}
+
+function getSystemHolidayEvents() {
+  return getHolidayYearsForDisplay().flatMap((year) => generateHolidayEventsForYear(year));
+}
+
+function getAllDisplayEvents() {
+  const now = new Date();
+  const holidays = getSystemHolidayEvents().filter((event) => isPublicEventActive(event, now));
+  return dedupeEvents([...state.events, ...holidays]);
 }
 
 function clampColorChannel(value) {
@@ -470,12 +1032,12 @@ function eventDetailHtml(event) {
   const rawLocation = pickText(event, "location") || formatAreaLabel(event.area) || "";
   const description = linkifyText(pickText(event, "description") || "");
   const location = escapeHtml(rawLocation);
-  const date = formatDateRange(event.date_start, event.date_end);
+  const date = formatDateRange(event.date_start, event.date_end, event.all_day);
   const languages = escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "));
   const price = escapeHtml(formatPrice(event));
   const ticketUrl = safeUrl(event.ticket_url);
   const sourceUrl = safeUrl(event.source_url);
-  const mapsUrl = safeUrl(googleMapsUrl(rawLocation, event.area));
+  const mapsUrl = event.is_system_holiday ? "" : safeUrl(googleMapsUrl(rawLocation, event.area));
   const links = [
     ticketUrl ? `<a href="${ticketUrl}" target="_blank" rel="noreferrer">Tickets / RSVP</a>` : "",
     sourceUrl ? `<a href="${sourceUrl}" target="_blank" rel="noreferrer">Website</a>` : "",
@@ -533,7 +1095,7 @@ function openDayModal(date, events, anchorEl = null) {
       <div class="modal-event" data-event-id="${event.id}">
         <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
         ${getEventImages(event)[0] ? `<img class="modal-poster" src="${getEventImages(event)[0]}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
-        <p>${escapeHtml(formatDateRange(event.date_start, event.date_end))}</p>
+        <p>${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</p>
         <p>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</p>
         ${badges.length ? `<div class="modal-event-badges">${badges.map((badge) => `<span class="modal-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
       </div>
@@ -830,9 +1392,9 @@ function renderFilters() {
 
 function filterEvents() {
   const { search, eventType, area, eventLanguage, dateFrom, dateTo } = state.filters;
-  return state.events
+  return getAllDisplayEvents()
     .filter((event) => {
-      const searchText = `${pickText(event, "title")} ${pickText(event, "description")}`.toLowerCase();
+      const searchText = `${pickText(event, "title")} ${pickText(event, "description")} ${pickText(event, "location")}`.toLowerCase();
       const matchesSearch = !search || searchText.includes(search.toLowerCase());
       const matchesType = !eventType || event.event_type === eventType;
       const matchesArea = !area || normalizeAreaValue(event.area) === area;
@@ -1004,7 +1566,7 @@ function renderEvents() {
     meta.className = "meta";
     meta.innerHTML = `
       <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
-      <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end))}</span>
+      <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
       <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
       <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
       <span>💰 ${escapeHtml(formatPrice(event))}</span>
@@ -1013,7 +1575,7 @@ function renderEvents() {
     const actions = document.createElement("div");
     const ticketUrl = safeUrl(event.ticket_url);
     const sourceUrl = safeUrl(event.source_url);
-    const mapsUrl = safeUrl(googleMapsUrl(pickText(event, "location") || formatAreaLabel(event.area), event.area));
+    const mapsUrl = event.is_system_holiday ? "" : safeUrl(googleMapsUrl(pickText(event, "location") || formatAreaLabel(event.area), event.area));
     if (ticketUrl) {
       const link = document.createElement("a");
       link.href = ticketUrl;
@@ -1242,9 +1804,22 @@ function renderCalendarMonth(events) {
     const eventsWrap = document.createElement("div");
     eventsWrap.className = "calendar-events";
     const items = grouped[key] || [];
+    const bankHoliday = items.find((event) => event.is_bank_holiday);
+    if (bankHoliday) {
+      cell.classList.add("calendar-cell-bank-holiday");
+      cell.style.setProperty("--calendar-bank-holiday-bg", bankHoliday.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg);
+      cell.style.setProperty("--calendar-bank-holiday-border", bankHoliday.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder);
+    }
     items.slice(0, visibleChipLimit).forEach((event) => {
       const chip = document.createElement("div");
       chip.className = "calendar-chip";
+      if (event.is_bank_holiday) {
+        chip.classList.add("calendar-chip-bank-holiday");
+        chip.style.setProperty("--holiday-chip-bg", event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg);
+        chip.style.setProperty("--holiday-chip-ink", event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk);
+      } else if (event.is_system_holiday) {
+        chip.classList.add("calendar-chip-holiday");
+      }
       chip.title = pickText(event, "title");
       chip.textContent = pickText(event, "title");
       eventsWrap.appendChild(chip);
@@ -1307,14 +1882,28 @@ function renderCalendarWeek(events) {
     label.textContent = date.toLocaleDateString(state.uiLang, { weekday: "short", day: "numeric" });
     const eventsWrap = document.createElement("div");
     eventsWrap.className = "calendar-events";
-    (grouped[key] || []).forEach((event) => {
+    const items = grouped[key] || [];
+    const bankHoliday = items.find((event) => event.is_bank_holiday);
+    if (bankHoliday) {
+      day.classList.add("calendar-week-day-bank-holiday");
+      day.style.setProperty("--calendar-bank-holiday-bg", bankHoliday.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg);
+      day.style.setProperty("--calendar-bank-holiday-border", bankHoliday.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder);
+    }
+    items.forEach((event) => {
       const chip = document.createElement("div");
       chip.className = "calendar-chip";
+      if (event.is_bank_holiday) {
+        chip.classList.add("calendar-chip-bank-holiday");
+        chip.style.setProperty("--holiday-chip-bg", event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg);
+        chip.style.setProperty("--holiday-chip-ink", event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk);
+      } else if (event.is_system_holiday) {
+        chip.classList.add("calendar-chip-holiday");
+      }
       chip.title = pickText(event, "title");
       chip.textContent = pickText(event, "title");
       eventsWrap.appendChild(chip);
     });
-    day.addEventListener("click", () => openDayModal(date, grouped[key] || [], day));
+    day.addEventListener("click", () => openDayModal(date, items, day));
     day.append(label, eventsWrap);
     grid.appendChild(day);
   }

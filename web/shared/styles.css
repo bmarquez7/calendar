@@ -625,6 +625,13 @@ section {
   overflow: hidden;
 }
 
+.calendar-cell-bank-holiday {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42)),
+    var(--calendar-bank-holiday-bg, rgba(109, 154, 216, 0.18));
+  border-color: var(--calendar-bank-holiday-border, rgba(109, 154, 216, 0.42));
+}
+
 .calendar-cell.inactive {
   opacity: 0.5;
 }
@@ -653,6 +660,18 @@ section {
   text-overflow: ellipsis;
 }
 
+.calendar-chip-holiday {
+  background: rgba(255, 248, 236, 0.95);
+  border-color: rgba(200, 101, 42, 0.24);
+}
+
+.calendar-chip-bank-holiday {
+  background: var(--holiday-chip-bg, rgba(236, 245, 255, 0.96));
+  border-color: var(--calendar-bank-holiday-border, rgba(109, 154, 216, 0.42));
+  color: var(--holiday-chip-ink, #295e97);
+  font-weight: 700;
+}
+
 .calendar-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -672,6 +691,13 @@ section {
   display: grid;
   gap: 8px;
   cursor: pointer;
+}
+
+.calendar-week-day-bank-holiday {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42)),
+    var(--calendar-bank-holiday-bg, rgba(109, 154, 216, 0.18));
+  border-color: var(--calendar-bank-holiday-border, rgba(109, 154, 216, 0.42));
 }
 
 .modal {
