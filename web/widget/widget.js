@@ -780,6 +780,77 @@ function getAllDisplayEvents() {
   return dedupeEvents([...state.events, ...holidays]);
 }
 
+function getHolidayUiStrings() {
+  return {
+    en: {
+      bank: "Bank Holiday",
+      religious: "Religious Holiday",
+      international: "International Holiday",
+      observed: "Observed",
+      allDay: "All day"
+    },
+    es: {
+      bank: "Festivo bancario",
+      religious: "Festividad religiosa",
+      international: "Festividad internacional",
+      observed: "Observado",
+      allDay: "Todo el día"
+    },
+    sq: {
+      bank: "Pushim bankar",
+      religious: "Festë fetare",
+      international: "Festë ndërkombëtare",
+      observed: "I zhvendosur",
+      allDay: "Gjatë gjithë ditës"
+    }
+  }[state.uiLang] || {
+    bank: "Bank Holiday",
+    religious: "Religious Holiday",
+    international: "International Holiday",
+    observed: "Observed",
+    allDay: "All day"
+  };
+}
+
+function getHolidayCategoryLabel(event) {
+  const strings = getHolidayUiStrings();
+  if (event.is_bank_holiday) return strings.bank;
+  if (String(event.holiday_category || "").startsWith("religious")) return strings.religious;
+  return strings.international;
+}
+
+function getHolidayBadgeLabels(event) {
+  if (!event.is_system_holiday) return [];
+  const strings = getHolidayUiStrings();
+  const labels = [getHolidayCategoryLabel(event), strings.allDay];
+  if (event.holiday_observed) labels.push(strings.observed);
+  return labels;
+}
+
+function getHolidayPalette(event) {
+  return {
+    soft: event.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg,
+    border: event.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder,
+    pillBg: event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg,
+    pillInk: event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk
+  };
+}
+
+function applyHolidayPaletteStyles(element, event) {
+  if (!element || !event?.is_system_holiday) return;
+  const palette = getHolidayPalette(event);
+  element.style.setProperty("--holiday-soft", palette.soft);
+  element.style.setProperty("--holiday-border", palette.border);
+  element.style.setProperty("--holiday-pill-bg", palette.pillBg);
+  element.style.setProperty("--holiday-pill-ink", palette.pillInk);
+}
+
+function buildHolidayBadgeHtml(event, extraLabels = []) {
+  const labels = [...getHolidayBadgeLabels(event), ...extraLabels];
+  if (!labels.length) return "";
+  return `<div class="holiday-pill-row">${labels.map((label) => `<span class="holiday-pill">${escapeHtml(label)}</span>`).join("")}</div>`;
+}
+
 function clampColorChannel(value) {
   return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
 }
@@ -1044,8 +1115,14 @@ function eventDetailHtml(event) {
     mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noreferrer">Google Maps</a>` : ""
   ].filter(Boolean).join(" · ");
   const images = getEventImages(event);
+  const holidayClass = event.is_system_holiday ? " event-detail-holiday" : "";
+  const holidayStyle = event.is_system_holiday
+    ? ` style="--holiday-soft:${escapeHtml(event.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg)};--holiday-border:${escapeHtml(event.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder)};--holiday-pill-bg:${escapeHtml(event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg)};--holiday-pill-ink:${escapeHtml(event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk)};"`
+    : "";
   return {
     html: `
+      <div class="event-detail-shell${holidayClass}"${holidayStyle}>
+      ${buildHolidayBadgeHtml(event)}
       <h3 id="modal-title">${title}</h3>
       ${buildModalGallery(images, title)}
       <p>${description}</p>
@@ -1057,6 +1134,7 @@ function eventDetailHtml(event) {
         <span>Price: ${price}</span>
       </div>
       ${links ? `<p>${links}</p>` : ""}
+      </div>
     `,
     onOpen() {
       mountModalGallery(images, titleText);
@@ -1091,13 +1169,20 @@ function openDayModal(date, events, anchorEl = null) {
         const badges = [];
         if (meta.isRecurring) badges.push("Recurring");
         if (meta.bucketCount > 1) badges.push(`Grouped x${meta.bucketCount}`);
+        const holidayClass = event.is_system_holiday ? " modal-event-holiday" : "";
+        const holidayStyle = event.is_system_holiday
+          ? ` style="--holiday-soft:${escapeHtml(event.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg)};--holiday-border:${escapeHtml(event.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder)};--holiday-pill-bg:${escapeHtml(event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg)};--holiday-pill-ink:${escapeHtml(event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk)};"`
+          : "";
         return `
-      <div class="modal-event" data-event-id="${event.id}">
+      <div class="modal-event${holidayClass}" data-event-id="${event.id}"${holidayStyle}>
         <h4>${escapeHtml(pickText(event, "title") || "Untitled")}</h4>
         ${getEventImages(event)[0] ? `<img class="modal-poster" src="${getEventImages(event)[0]}" alt="${escapeHtml(pickText(event, "title") || "Event")}" loading="lazy" />` : ""}
         <p>${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</p>
         <p>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</p>
-        ${badges.length ? `<div class="modal-event-badges">${badges.map((badge) => `<span class="modal-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
+        ${(event.is_system_holiday || badges.length) ? `<div class="modal-event-badges">${[
+          ...getHolidayBadgeLabels(event),
+          ...badges
+        ].map((badge) => `<span class="modal-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
       </div>
     `;
       }
@@ -1547,10 +1632,28 @@ function renderEvents() {
   events.forEach((event) => {
     const card = document.createElement("div");
     card.className = "card";
+    if (event.is_system_holiday) {
+      card.classList.add("card-holiday");
+      if (event.is_bank_holiday) card.classList.add("card-bank-holiday");
+      applyHolidayPaletteStyles(card, event);
+    }
+    const badgeRow = document.createElement("div");
+    if (event.is_system_holiday) {
+      badgeRow.className = "holiday-pill-row";
+      getHolidayBadgeLabels(event).forEach((label) => {
+        const badge = document.createElement("span");
+        badge.className = "holiday-pill";
+        badge.textContent = label;
+        badgeRow.appendChild(badge);
+      });
+    }
     const title = document.createElement("h3");
     title.textContent = pickText(event, "title");
     const desc = document.createElement("p");
     desc.innerHTML = linkifyText(pickText(event, "description"));
+    if (event.is_system_holiday) {
+      desc.classList.add("card-holiday-description");
+    }
     desc.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
     });
@@ -1564,15 +1667,24 @@ function renderEvents() {
     }
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.innerHTML = `
-      <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
-      <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
-      <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
-      <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
-      <span>💰 ${escapeHtml(formatPrice(event))}</span>
-    `;
+    if (event.is_system_holiday) {
+      meta.innerHTML = `
+        <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
+        <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
+        <span>🏷️ ${escapeHtml(getHolidayCategoryLabel(event))}</span>
+      `;
+    } else {
+      meta.innerHTML = `
+        <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
+        <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
+        <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
+        <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
+        <span>💰 ${escapeHtml(formatPrice(event))}</span>
+      `;
+    }
 
     const actions = document.createElement("div");
+    actions.className = "card-actions";
     const ticketUrl = safeUrl(event.ticket_url);
     const sourceUrl = safeUrl(event.source_url);
     const mapsUrl = event.is_system_holiday ? "" : safeUrl(googleMapsUrl(pickText(event, "location") || formatAreaLabel(event.area), event.area));
@@ -1609,10 +1721,16 @@ function renderEvents() {
       actions.appendChild(link);
     }
 
+    if (badgeRow.childNodes.length) {
+      card.appendChild(badgeRow);
+    }
     if (eventImageUrl) {
-      card.append(title, image, desc, meta, actions);
+      card.append(title, image, desc, meta);
     } else {
-      card.append(title, desc, meta, actions);
+      card.append(title, desc, meta);
+    }
+    if (actions.childNodes.length) {
+      card.appendChild(actions);
     }
     card.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: card }));
     eventList.appendChild(card);

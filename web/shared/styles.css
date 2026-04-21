@@ -423,6 +423,23 @@ section {
   cursor: pointer;
 }
 
+.card-holiday {
+  position: relative;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.82)),
+    var(--holiday-soft, var(--surface));
+  border-color: var(--holiday-border, var(--border));
+}
+
+.card-holiday::before {
+  content: "";
+  position: absolute;
+  inset: 14px auto 14px 0;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--holiday-pill-ink, var(--brand));
+}
+
 .card p {
   margin: 0;
 }
@@ -430,6 +447,16 @@ section {
 .card h3 {
   margin: 0;
   font-family: var(--font-title);
+}
+
+.card-holiday h3 {
+  padding-left: 8px;
+}
+
+.card-holiday-description {
+  color: var(--muted);
+  line-height: 1.5;
+  padding-left: 8px;
 }
 
 .event-poster {
@@ -449,6 +476,35 @@ section {
   gap: 8px 12px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.card-holiday .meta {
+  padding-left: 8px;
+}
+
+.card-actions {
+  color: var(--brand);
+  font-size: 14px;
+}
+
+.holiday-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.holiday-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--holiday-border, var(--border));
+  background: var(--holiday-pill-bg, rgba(255, 255, 255, 0.92));
+  color: var(--holiday-pill-ink, var(--brand-dark));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .badge {
@@ -761,6 +817,13 @@ section {
   cursor: pointer;
 }
 
+.modal-event-holiday {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.82)),
+    var(--holiday-soft, var(--surface-2));
+  border-color: var(--holiday-border, var(--border));
+}
+
 .modal-event h4 {
   margin: 0 0 6px;
   font-family: var(--font-title);
@@ -783,6 +846,22 @@ section {
   color: var(--brand-dark);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.modal-event-holiday .modal-event-badge,
+.event-detail-holiday .holiday-pill {
+  border-color: var(--holiday-border, var(--border));
+  background: var(--holiday-pill-bg, rgba(255, 255, 255, 0.82));
+  color: var(--holiday-pill-ink, var(--brand-dark));
+}
+
+.event-detail-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.event-detail-holiday {
+  padding-left: 2px;
 }
 
 .modal-poster {
