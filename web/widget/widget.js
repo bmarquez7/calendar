@@ -17,7 +17,7 @@ const FEATURED_FIXED_COUNT = 5;
 const FEATURED_TOTAL_COUNT = 10;
 const FEATURED_ROTATE_COUNT = FEATURED_TOTAL_COUNT - FEATURED_FIXED_COUNT;
 const FEATURED_ROTATION_MS = 45_000;
-const MOBILE_FEATURED_SCROLL_MS = 5_500;
+const MOBILE_FEATURED_SCROLL_MS = 3_000;
 const HOLIDAY_YEAR_LOOKBACK = 0;
 const HOLIDAY_YEAR_LOOKAHEAD = 1;
 const TIRANA_TIMEZONE = "Europe/Tirane";
@@ -1759,7 +1759,26 @@ function getHighlightedEvents() {
   return [...fixedRow, ...rotatingRow];
 }
 
+function getMobileFeaturedEvents() {
+  const monthStart = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
+  const monthEnd = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  const candidates = getFeaturedCandidateEvents().filter((event) => {
+    const start = event.date_start ? new Date(event.date_start) : null;
+    const end = eventEndsAt(event) || start;
+    if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return false;
+    return start <= monthEnd && end >= monthStart;
+  });
+  return candidates.length ? candidates : getHighlightedEvents();
+}
+
 function ensureFeaturedRotation() {
+  if (isMobileViewport()) {
+    if (featuredRotationTimer) {
+      clearInterval(featuredRotationTimer);
+      featuredRotationTimer = null;
+    }
+    return;
+  }
   const candidateCount = Math.max(0, getFeaturedCandidateEvents().length - FEATURED_FIXED_COUNT);
   if (candidateCount <= FEATURED_ROTATE_COUNT) {
     if (featuredRotationTimer) {
@@ -1951,7 +1970,7 @@ function renderEvents() {
 
 function renderFeatured() {
   ensureFeaturedRotation();
-  const items = getHighlightedEvents();
+  const items = isMobileViewport() ? getMobileFeaturedEvents() : getHighlightedEvents();
   const placeholderImage = state.settings?.featured_placeholder_image_url || "";
 
   featuredGrid.innerHTML = "";
