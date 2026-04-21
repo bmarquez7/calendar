@@ -342,6 +342,117 @@ body.modal-open {
   gap: 6px;
 }
 
+.filter-picker-control {
+  position: relative;
+}
+
+.filter-picker-trigger {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.filter-picker-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-picker-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+
+.filter-picker-control.is-open .filter-picker-chevron {
+  transform: rotate(180deg);
+}
+
+.filter-picker-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: max(100%, 320px);
+  max-width: min(460px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 16px 36px rgba(31, 26, 20, 0.12);
+  display: none;
+  gap: 12px;
+}
+
+.filter-picker-control.is-open .filter-picker-panel {
+  display: grid;
+}
+
+.filter-picker-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.filter-picker-panel-header strong {
+  font-size: 13px;
+}
+
+.filter-picker-clear {
+  padding: 6px 10px;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.filter-picker-groups {
+  display: grid;
+  gap: 10px;
+  max-height: min(360px, 52vh);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.filter-picker-group {
+  display: grid;
+  gap: 8px;
+}
+
+.filter-picker-group h4 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.filter-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-picker-option {
+  min-height: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(187, 167, 144, 0.7);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.filter-picker-option.is-selected {
+  background: rgba(200, 101, 42, 0.14);
+  border-color: rgba(200, 101, 42, 0.5);
+  color: var(--brand-dark);
+}
+
 .control-compact label,
 .visually-hidden {
   position: absolute;
@@ -2120,6 +2231,20 @@ section {
 
   .widget-filter-controls {
     display: none;
+  }
+
+  .filter-picker-panel {
+    width: 100%;
+    max-width: none;
+  }
+
+  .filter-picker-options {
+    gap: 6px;
+  }
+
+  .filter-picker-option {
+    font-size: 11px;
+    padding: 7px 9px;
   }
 
   .featured-box {

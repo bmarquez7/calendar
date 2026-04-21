@@ -256,7 +256,7 @@ const state = {
     search: "",
     eventType: [],
     area: [],
-    eventLanguage: "",
+    eventLanguage: [],
     dateFrom: "",
     dateTo: "",
     sort: "date_asc"
@@ -1329,9 +1329,9 @@ function addDays(date, days) {
   return result;
 }
 
-function registerFilterElement(name, element) {
+function registerFilterElement(name, syncer) {
   if (!filterInputRegistry.has(name)) filterInputRegistry.set(name, []);
-  filterInputRegistry.get(name).push(element);
+  filterInputRegistry.get(name).push(syncer);
 }
 
 function setFilterValue(name, value) {
@@ -1344,7 +1344,7 @@ function activeMobileFilterCount() {
   let count = 0;
   if (state.filters.eventType.length) count += 1;
   if (state.filters.area.length) count += 1;
-  if (state.filters.eventLanguage) count += 1;
+  if (state.filters.eventLanguage.length) count += 1;
   if (state.filters.dateFrom) count += 1;
   if (state.filters.dateTo) count += 1;
   if (state.filters.sort && state.filters.sort !== "date_asc") count += 1;
@@ -1352,18 +1352,8 @@ function activeMobileFilterCount() {
 }
 
 function syncFilterInputs() {
-  filterInputRegistry.forEach((elements, name) => {
-    elements.forEach((element) => {
-      const value = state.filters[name];
-      if (element instanceof HTMLSelectElement && element.multiple) {
-        const selectedValues = Array.isArray(value) ? value : [];
-        [...element.options].forEach((option) => {
-          option.selected = selectedValues.includes(option.value);
-        });
-        return;
-      }
-      element.value = Array.isArray(value) ? "" : (value || "");
-    });
+  filterInputRegistry.forEach((syncers, name) => {
+    syncers.forEach((syncer) => syncer(state.filters[name], name));
   });
   if (mobileFiltersButton) {
     const count = activeMobileFilterCount();
@@ -1375,6 +1365,7 @@ function closeMobileFilterPanel() {
   if (!mobileFilterPanel) return;
   mobileFilterPanel.classList.add("hidden");
   mobileFiltersButton?.setAttribute("aria-expanded", "false");
+  closeAllFilterPickers();
 }
 
 function toggleMobileFilterPanel() {
@@ -1382,6 +1373,7 @@ function toggleMobileFilterPanel() {
   const nextOpen = mobileFilterPanel.classList.contains("hidden");
   mobileFilterPanel.classList.toggle("hidden", !nextOpen);
   mobileFiltersButton?.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+  if (!nextOpen) closeAllFilterPickers();
 }
 
 function createSelect(name, labelText, options, includeAny = true, config = {}) {
@@ -1429,7 +1421,16 @@ function createSelect(name, labelText, options, includeAny = true, config = {}) 
     }
     setFilterValue(name, event.target.value);
   });
-  registerFilterElement(name, select);
+  registerFilterElement(name, (value) => {
+    if (select.multiple) {
+      const selectedValues = Array.isArray(value) ? value : [];
+      [...select.options].forEach((option) => {
+        option.selected = selectedValues.includes(option.value);
+      });
+      return;
+    }
+    select.value = Array.isArray(value) ? "" : (value || "");
+  });
   wrap.append(label, select);
   return wrap;
 }
@@ -1448,8 +1449,166 @@ function createInput(name, labelText, type = "text", placeholder = "", config = 
   input.addEventListener(type === "text" ? "input" : "change", (event) => {
     setFilterValue(name, event.target.value);
   });
-  registerFilterElement(name, input);
+  registerFilterElement(name, (value) => {
+    input.value = Array.isArray(value) ? "" : (value || "");
+  });
   wrap.append(label, input);
+  return wrap;
+}
+
+function normalizePickerGroups(options) {
+  return options
+    .map((option) => {
+      if (option?.options) {
+        return {
+          label: option.label,
+          options: option.options.map((groupOption) => ({
+            value: groupOption.value ?? groupOption,
+            label: groupOption.label ?? groupOption
+          }))
+        };
+      }
+      return {
+        label: "",
+        options: [{
+          value: option.value ?? option,
+          label: option.label ?? option
+        }]
+      };
+    })
+    .filter((group) => group.options.length);
+}
+
+function closeAllFilterPickers(exceptControl = null) {
+  document.querySelectorAll(".filter-picker-control.is-open").forEach((control) => {
+    if (exceptControl && control === exceptControl) return;
+    control.classList.remove("is-open");
+    control.querySelector(".filter-picker-trigger")?.setAttribute("aria-expanded", "false");
+  });
+}
+
+function getFilterPickerSummary(labelText, selectedValues, optionLookup) {
+  if (!selectedValues.length) return `All ${labelText.toLowerCase()}`;
+  const selectedLabels = selectedValues
+    .map((value) => optionLookup.get(value))
+    .filter(Boolean);
+  if (!selectedLabels.length) return `All ${labelText.toLowerCase()}`;
+  if (selectedLabels.length === 1) return selectedLabels[0];
+  if (selectedLabels.length === 2) return `${selectedLabels[0]} · ${selectedLabels[1]}`;
+  return `${selectedLabels[0]} +${selectedLabels.length - 1}`;
+}
+
+function createFilterPicker(name, labelText, options, config = {}) {
+  const wrap = document.createElement("div");
+  wrap.className = `control control-${name} filter-picker-control`;
+  wrap.dataset.filterPickerName = name;
+  if (config.compact) wrap.classList.add("control-compact");
+
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  if (config.hideLabel) label.classList.add("visually-hidden");
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "filter-picker-trigger";
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-haspopup", "dialog");
+
+  const summary = document.createElement("span");
+  summary.className = "filter-picker-summary";
+  const chevron = document.createElement("span");
+  chevron.className = "filter-picker-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "▾";
+  trigger.append(summary, chevron);
+
+  const panel = document.createElement("div");
+  panel.className = "filter-picker-panel";
+
+  const panelHeader = document.createElement("div");
+  panelHeader.className = "filter-picker-panel-header";
+  const panelTitle = document.createElement("strong");
+  panelTitle.textContent = labelText;
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "filter-picker-clear";
+  clear.textContent = "Clear";
+  clear.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setFilterValue(name, []);
+  });
+  panelHeader.append(panelTitle, clear);
+  panel.appendChild(panelHeader);
+
+  const groupsWrap = document.createElement("div");
+  groupsWrap.className = "filter-picker-groups";
+  const groups = normalizePickerGroups(options);
+  const optionLookup = new Map();
+  const optionButtons = [];
+
+  groups.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "filter-picker-group";
+    if (group.label) {
+      const heading = document.createElement("h4");
+      heading.textContent = group.label;
+      section.appendChild(heading);
+    }
+    const optionsGrid = document.createElement("div");
+    optionsGrid.className = "filter-picker-options";
+    group.options.forEach((option) => {
+      optionLookup.set(option.value, option.label);
+      const optionButton = document.createElement("button");
+      optionButton.type = "button";
+      optionButton.className = "filter-picker-option";
+      optionButton.dataset.value = option.value;
+      optionButton.textContent = option.label;
+      optionButton.setAttribute("aria-pressed", "false");
+      optionButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const current = Array.isArray(state.filters[name]) ? state.filters[name] : [];
+        const next = current.includes(option.value)
+          ? current.filter((value) => value !== option.value)
+          : [...current, option.value];
+        setFilterValue(name, next);
+      });
+      optionsGrid.appendChild(optionButton);
+      optionButtons.push(optionButton);
+    });
+    section.appendChild(optionsGrid);
+    groupsWrap.appendChild(section);
+  });
+
+  panel.appendChild(groupsWrap);
+
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextOpen = !wrap.classList.contains("is-open");
+    closeAllFilterPickers(nextOpen ? wrap : null);
+    wrap.classList.toggle("is-open", nextOpen);
+    trigger.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+  });
+
+  panel.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  registerFilterElement(name, (value) => {
+    const selectedValues = Array.isArray(value) ? value : [];
+    summary.textContent = getFilterPickerSummary(labelText, selectedValues, optionLookup);
+    summary.title = summary.textContent;
+    clear.hidden = !selectedValues.length;
+    optionButtons.forEach((button) => {
+      const isSelected = selectedValues.includes(button.dataset.value);
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    });
+  });
+
+  wrap.append(label, trigger, panel);
   return wrap;
 }
 
@@ -1458,25 +1617,29 @@ function createFilterDescriptors(strings) {
     {
       name: "eventType",
       render(config = {}) {
-        return createSelect(
+        return createFilterPicker(
           "eventType",
           strings.filters.eventType,
           EVENT_TYPES.map((t) => ({ value: t, label: t })),
-          false,
-          { ...config, multiple: true, size: config.compact ? 5 : 6 }
+          config
         );
       }
     },
     {
       name: "area",
       render(config = {}) {
-        return createSelect("area", strings.filters.area, AREA_GROUPS, false, { ...config, multiple: true, size: config.compact ? 7 : 8 });
+        return createFilterPicker("area", strings.filters.area, AREA_GROUPS, config);
       }
     },
     {
       name: "eventLanguage",
       render(config = {}) {
-        return createSelect("eventLanguage", strings.filters.eventLanguage, state.eventLanguageOptions.map((l) => ({ value: l.code, label: l.label })), true, config);
+        return createFilterPicker(
+          "eventLanguage",
+          strings.filters.eventLanguage,
+          state.eventLanguageOptions.map((language) => ({ value: language.code, label: language.label })),
+          config
+        );
       }
     },
     {
@@ -1532,7 +1695,7 @@ function filterEvents() {
       const matchesSearch = !search || searchText.includes(search.toLowerCase());
       const matchesType = !eventType.length || eventType.includes(event.event_type);
       const matchesArea = !area.length || area.includes(normalizeAreaValue(event.area));
-      const matchesLanguage = !eventLanguage || (event.event_language || []).includes(eventLanguage);
+      const matchesLanguage = !eventLanguage.length || (event.event_language || []).some((language) => eventLanguage.includes(language));
       const startDate = event.date_start ? new Date(event.date_start) : null;
       const matchesFrom = !dateFrom || (startDate && startDate >= new Date(dateFrom));
       const matchesTo = !dateTo || (startDate && startDate <= new Date(dateTo));
@@ -2389,7 +2552,7 @@ resetFilters.addEventListener("click", () => {
     search: "",
     eventType: [],
     area: [],
-    eventLanguage: "",
+    eventLanguage: [],
     dateFrom: "",
     dateTo: "",
     sort: "date_asc"
@@ -2420,6 +2583,9 @@ languageButton.addEventListener("click", () => {
 });
 document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target : null;
+  if (target && !target.closest(".filter-picker-control")) {
+    closeAllFilterPickers();
+  }
   if (!languageButton.contains(event.target) && !languageMenu.contains(event.target)) {
     languageMenu.classList.add("hidden");
   }
@@ -2472,6 +2638,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !eventModal.classList.contains("hidden")) {
     closeModal();
   }
+  if (event.key === "Escape") {
+    closeAllFilterPickers();
+  }
   if (event.key === "Escape" && mobileFilterPanel && !mobileFilterPanel.classList.contains("hidden")) {
     closeMobileFilterPanel();
   }
@@ -2479,6 +2648,7 @@ document.addEventListener("keydown", (event) => {
 let resizeRaf = null;
 window.addEventListener("resize", () => {
   syncModalPlacement();
+  closeAllFilterPickers();
   if (resizeRaf) cancelAnimationFrame(resizeRaf);
   resizeRaf = requestAnimationFrame(() => {
     if (!isMobileViewport()) {
