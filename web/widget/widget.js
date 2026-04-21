@@ -1895,15 +1895,6 @@ function clearCalendarDayFocus() {
   state.expandedCalendarEventId = "";
 }
 
-function scrollCalendarDayFocusIntoView() {
-  requestAnimationFrame(() => {
-    const panel = calendarView.querySelector(".calendar-day-focus");
-    if (!panel) return;
-    const top = Math.max(0, panel.getBoundingClientRect().top + window.scrollY - 12);
-    window.scrollTo({ top, behavior: "smooth" });
-  });
-}
-
 function shiftCalendarMonth(monthOffset) {
   clearCalendarDayFocus();
   state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + monthOffset, 1);
@@ -1914,7 +1905,6 @@ function openCalendarDayAfterRender(date) {
   state.selectedCalendarDayKey = toDateKey(date);
   state.expandedCalendarEventId = "";
   render();
-  scrollCalendarDayFocusIntoView();
 }
 
 function attachMonthSwipeNavigation(target) {
@@ -2071,6 +2061,44 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   return panel;
 }
 
+function positionCalendarDayFocus(wrapper, grid, layer, panel) {
+  const selectedCell = grid.querySelector(`[data-date-key="${state.selectedCalendarDayKey}"]`);
+  if (!selectedCell || !layer || !panel) {
+    wrapper.style.removeProperty("--calendar-day-focus-reserve");
+    return;
+  }
+
+  const wrapperWidth = wrapper.clientWidth;
+  const gridWidth = grid.clientWidth;
+  const selectedWidth = selectedCell.offsetWidth;
+  const viewportMobile = isMobileViewport();
+  const horizontalPadding = viewportMobile ? 8 : 14;
+  const maxWidth = Math.max(280, wrapperWidth - horizontalPadding * 2);
+  let panelWidth;
+
+  if (viewportMobile) {
+    panelWidth = maxWidth;
+  } else if (wrapperWidth <= 920) {
+    panelWidth = Math.min(maxWidth, Math.max(Math.round(gridWidth * 0.82), 560));
+  } else {
+    panelWidth = Math.min(maxWidth, Math.max(Math.round(gridWidth * 0.76), 760));
+  }
+
+  const idealLeft = selectedCell.offsetLeft + selectedWidth / 2 - panelWidth / 2;
+  const left = Math.max(horizontalPadding, Math.min(idealLeft, wrapperWidth - panelWidth - horizontalPadding));
+  const top = grid.offsetTop + selectedCell.offsetTop - (viewportMobile ? 4 : 6);
+
+  layer.style.setProperty("--calendar-day-focus-left", `${left}px`);
+  layer.style.setProperty("--calendar-day-focus-top", `${top}px`);
+  layer.style.setProperty("--calendar-day-focus-width", `${panelWidth}px`);
+
+  requestAnimationFrame(() => {
+    const panelBottom = top + panel.offsetHeight;
+    const reserve = Math.max(0, panelBottom - (grid.offsetTop + grid.offsetHeight) + 16);
+    wrapper.style.setProperty("--calendar-day-focus-reserve", `${reserve}px`);
+  });
+}
+
 function getMonthCalendarMetrics(days, grouped) {
   const maxEvents = days.reduce((max, date) => Math.max(max, (grouped[toDateKey(date)] || []).length), 0);
   if (isMobileViewport()) {
@@ -2102,7 +2130,7 @@ function renderCalendarMonth(events) {
   const { visibleChipLimit, cellHeight } = getMonthCalendarMetrics(days, grouped);
 
   const wrapper = document.createElement("div");
-  wrapper.className = "calendar";
+  wrapper.className = "calendar calendar-month-shell";
   wrapper.style.setProperty("--calendar-cell-height", `${cellHeight}px`);
   const header = document.createElement("div");
   header.className = "calendar-header";
@@ -2185,7 +2213,6 @@ function renderCalendarMonth(events) {
       state.selectedCalendarDayKey = key;
       state.expandedCalendarEventId = "";
       render();
-      scrollCalendarDayFocusIntoView();
     });
     cell.append(dateLabel, eventsWrap);
     grid.appendChild(cell);
@@ -2193,13 +2220,20 @@ function renderCalendarMonth(events) {
 
   attachMonthSwipeNavigation(grid);
   wrapper.append(header, grid);
+  calendarView.appendChild(wrapper);
   if (state.selectedCalendarDayKey) {
     const selectedDate = parseDateKey(state.selectedCalendarDayKey);
     if (selectedDate) {
-      wrapper.appendChild(buildCalendarDayFocusPanel(selectedDate, grouped[state.selectedCalendarDayKey] || []));
+      const focusLayer = document.createElement("div");
+      focusLayer.className = "calendar-day-focus-layer";
+      const focusPanel = buildCalendarDayFocusPanel(selectedDate, grouped[state.selectedCalendarDayKey] || []);
+      focusLayer.appendChild(focusPanel);
+      wrapper.appendChild(focusLayer);
+      positionCalendarDayFocus(wrapper, grid, focusLayer, focusPanel);
     }
+  } else {
+    wrapper.style.setProperty("--calendar-day-focus-reserve", "0px");
   }
-  calendarView.appendChild(wrapper);
 }
 
 function renderCalendarWeek(events) {
