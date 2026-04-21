@@ -1017,22 +1017,48 @@ function syncModalPlacement() {
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
   const mobileViewport = window.innerWidth <= 720;
+  const topGap = mobileViewport ? 10 : 18;
+  const sideGap = mobileViewport ? 8 : 16;
+  const bottomGap = mobileViewport ? 14 : 26;
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   const defaultTop = mobileViewport ? 12 : Math.max(20, Math.round(viewportHeight * 0.08));
   let nextTop = defaultTop;
   let nextLeft = Math.round(viewportWidth / 2);
+  let originX = 50;
+  let originY = 0;
 
   const rect = activeModalAnchorRect || (activeModalAnchor ? activeModalAnchor.getBoundingClientRect() : null);
   if (rect) {
-    const modalHeight = modalContent?.offsetHeight || (mobileViewport ? 360 : 480);
-    const bottomGap = mobileViewport ? 18 : 28;
-    const maxTop = Math.max(defaultTop, viewportHeight - modalHeight - bottomGap);
-    const preferredTop = Math.round(rect.top + (mobileViewport ? 6 : 10));
-    nextTop = Math.min(Math.max(defaultTop, preferredTop), maxTop);
-    nextLeft = Math.round(rect.left + rect.width / 2);
+    const modalHeight = Math.max(220, Math.min(modalContent?.offsetHeight || (mobileViewport ? 360 : 480), viewportHeight - topGap - bottomGap));
+    const modalWidth = Math.max(280, Math.min(modalContent?.offsetWidth || Math.min(760, viewportWidth - (sideGap * 2)), viewportWidth - (sideGap * 2)));
+    const minLeft = sideGap + (modalWidth / 2);
+    const maxLeft = viewportWidth - sideGap - (modalWidth / 2);
+    const anchorCenter = rect.left + (rect.width / 2);
+    const roomBelow = viewportHeight - rect.bottom - bottomGap;
+    const roomAbove = rect.top - topGap;
+    const openBelow = roomBelow >= Math.min(modalHeight * 0.55, 260) || roomBelow >= roomAbove;
+    const preferredBelowTop = rect.bottom + (mobileViewport ? 6 : 10);
+    const preferredAboveTop = rect.top - modalHeight - (mobileViewport ? 6 : 10);
+    const minTop = topGap;
+    const maxTop = Math.max(minTop, viewportHeight - modalHeight - bottomGap);
+
+    nextTop = clamp(
+      Math.round(openBelow ? preferredBelowTop : preferredAboveTop),
+      minTop,
+      maxTop
+    );
+    nextLeft = Math.round(clamp(anchorCenter, minLeft, maxLeft));
+
+    const modalLeftEdge = nextLeft - (modalWidth / 2);
+    const originXPx = clamp(anchorCenter - modalLeftEdge, 24, modalWidth - 24);
+    originX = Math.round((originXPx / modalWidth) * 100);
+    originY = openBelow ? 0 : 100;
   }
 
   eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
   eventModal.style.setProperty("--modal-anchor-left", `${nextLeft}px`);
+  eventModal.style.setProperty("--modal-origin-x", `${originX}%`);
+  eventModal.style.setProperty("--modal-origin-y", `${originY}%`);
 }
 
 function openModal(content, options = {}) {
@@ -1048,6 +1074,14 @@ function openModal(content, options = {}) {
   eventModal.classList.remove("hidden");
   document.body.classList.add("modal-open");
   syncModalPlacement();
+  requestAnimationFrame(syncModalPlacement);
+  requestAnimationFrame(() => {
+    modalBody.querySelectorAll("img").forEach((image) => {
+      if (image.complete) return;
+      image.addEventListener("load", syncModalPlacement, { once: true });
+      image.addEventListener("error", syncModalPlacement, { once: true });
+    });
+  });
   if (content && typeof content.onOpen === "function") {
     content.onOpen();
   }
@@ -1060,6 +1094,8 @@ function closeModal() {
   activeModalAnchorRect = null;
   eventModal.style.removeProperty("--modal-anchor-top");
   eventModal.style.removeProperty("--modal-anchor-left");
+  eventModal.style.removeProperty("--modal-origin-x");
+  eventModal.style.removeProperty("--modal-origin-y");
   document.body.classList.remove("modal-open");
 }
 

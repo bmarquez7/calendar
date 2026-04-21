@@ -1358,6 +1358,17 @@ section {
   }
 }
 
+@keyframes modalNearClickIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .modal {
   position: fixed;
   inset: 0;
@@ -1411,6 +1422,8 @@ section {
     calc(var(--modal-anchor-left, 50vw) - (var(--event-modal-width) / 2)),
     calc(100vw - var(--event-modal-width) - 16px)
   );
+  transform-origin: var(--modal-origin-x, 50%) var(--modal-origin-y, 0%);
+  animation: modalNearClickIn 180ms ease-out;
 }
 
 .modal-close {
