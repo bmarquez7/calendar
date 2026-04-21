@@ -661,6 +661,10 @@ section {
   gap: 8px;
 }
 
+.calendar-month-grid {
+  touch-action: pan-y;
+}
+
 .calendar-day {
   font-size: 12px;
   color: var(--muted);

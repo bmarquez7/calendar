@@ -1016,7 +1016,8 @@ function syncModalPlacement() {
     const maxTop = mobileViewport
       ? Math.max(16, viewportHeight - 220)
       : Math.max(24, viewportHeight - 320);
-    nextTop = Math.min(Math.max(mobileViewport ? 12 : 24, preferredTop), maxTop);
+    const anchoredTopCap = defaultTop + (mobileViewport ? 56 : 80);
+    nextTop = Math.min(Math.max(defaultTop, preferredTop), Math.min(anchoredTopCap, maxTop));
   }
 
   eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
@@ -1849,6 +1850,64 @@ function isMobileViewport() {
   return window.matchMedia("(max-width: 720px)").matches;
 }
 
+function shiftCalendarMonth(monthOffset) {
+  state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + monthOffset, 1);
+  render();
+}
+
+function openCalendarDayAfterRender(date) {
+  const targetKey = toDateKey(date);
+  requestAnimationFrame(() => {
+    const refreshedEvents = filterEvents();
+    const refreshedGrouped = groupEventsByDate(refreshedEvents);
+    const targetCell = calendarView.querySelector(`[data-date-key="${targetKey}"]`);
+    openDayModal(date, refreshedGrouped[targetKey] || [], targetCell || null);
+  });
+}
+
+function attachMonthSwipeNavigation(target) {
+  if (!target) return;
+  let touchStart = null;
+
+  target.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) {
+      touchStart = null;
+      return;
+    }
+    const touch = event.touches[0];
+    touchStart = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: Date.now()
+    };
+  }, { passive: true });
+
+  target.addEventListener("touchend", (event) => {
+    if (!touchStart) return;
+    const touch = event.changedTouches?.[0];
+    if (!touch) {
+      touchStart = null;
+      return;
+    }
+
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = touch.clientY - touchStart.y;
+    const elapsed = Date.now() - touchStart.at;
+    touchStart = null;
+
+    if (elapsed > 900) return;
+    if (Math.abs(deltaX) < 48) return;
+    if (Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
+
+    event.preventDefault();
+    shiftCalendarMonth(deltaX < 0 ? 1 : -1);
+  }, { passive: false });
+
+  target.addEventListener("touchcancel", () => {
+    touchStart = null;
+  }, { passive: true });
+}
+
 function getMonthCalendarMetrics(days, grouped) {
   const maxEvents = days.reduce((max, date) => Math.max(max, (grouped[toDateKey(date)] || []).length), 0);
   if (isMobileViewport()) {
@@ -1888,22 +1947,16 @@ function renderCalendarMonth(events) {
   const prev = document.createElement("button");
   prev.className = "secondary";
   prev.textContent = "←";
-  prev.addEventListener("click", () => {
-    state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() - 1, 1);
-    render();
-  });
+  prev.addEventListener("click", () => shiftCalendarMonth(-1));
   const next = document.createElement("button");
   next.className = "secondary";
   next.textContent = "→";
-  next.addEventListener("click", () => {
-    state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 1);
-    render();
-  });
+  next.addEventListener("click", () => shiftCalendarMonth(1));
   nav.append(prev, next);
   header.append(title, nav);
 
   const grid = document.createElement("div");
-  grid.className = "calendar-grid";
+  grid.className = "calendar-grid calendar-month-grid";
   const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   dayNames.forEach((day) => {
     const el = document.createElement("div");
@@ -1916,7 +1969,9 @@ function renderCalendarMonth(events) {
     const key = toDateKey(date);
     const cell = document.createElement("div");
     cell.className = "calendar-cell";
-    if (date < monthStart || date > monthEnd) cell.classList.add("inactive");
+    cell.dataset.dateKey = key;
+    const isOutsideCurrentMonth = date < monthStart || date > monthEnd;
+    if (isOutsideCurrentMonth) cell.classList.add("inactive");
     const dateLabel = document.createElement("div");
     dateLabel.className = "calendar-date";
     dateLabel.textContent = date.getDate();
@@ -1949,11 +2004,20 @@ function renderCalendarMonth(events) {
       more.textContent = `+${items.length - visibleChipLimit} more`;
       eventsWrap.appendChild(more);
     }
-    cell.addEventListener("click", () => openDayModal(date, items, cell));
+    cell.addEventListener("click", () => {
+      if (isOutsideCurrentMonth) {
+        state.calendarDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        render();
+        openCalendarDayAfterRender(date);
+        return;
+      }
+      openDayModal(date, items, cell);
+    });
     cell.append(dateLabel, eventsWrap);
     grid.appendChild(cell);
   });
 
+  attachMonthSwipeNavigation(grid);
   wrapper.append(header, grid);
   calendarView.appendChild(wrapper);
 }
