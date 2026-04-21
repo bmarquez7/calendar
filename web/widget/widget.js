@@ -2267,7 +2267,11 @@ function buildDayPanelEventCard(event, meta, isExpanded) {
   `;
   summary.addEventListener("click", (eventObject) => {
     eventObject.stopPropagation();
-    state.expandedCalendarEventId = isExpanded ? "" : String(event.id);
+    if (isExpanded) {
+      openModal(eventDetailHtml(event), { anchorEl: summary });
+      return;
+    }
+    state.expandedCalendarEventId = String(event.id);
     render();
   });
   card.appendChild(summary);
@@ -2281,6 +2285,18 @@ function buildDayPanelEventCard(event, meta, isExpanded) {
     detailWrap.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
     });
+    const detailActions = document.createElement("div");
+    detailActions.className = "calendar-day-event-detail-actions";
+    const openEventButton = document.createElement("button");
+    openEventButton.type = "button";
+    openEventButton.className = "secondary calendar-day-event-open-button";
+    openEventButton.textContent = "Open full event";
+    openEventButton.addEventListener("click", (eventObject) => {
+      eventObject.stopPropagation();
+      openModal(eventDetailHtml(event), { anchorEl: openEventButton });
+    });
+    detailActions.appendChild(openEventButton);
+    detailWrap.appendChild(detailActions);
     card.appendChild(detailWrap);
   }
 
