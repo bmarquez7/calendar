@@ -1848,19 +1848,103 @@ function syncMobileFeaturedCarousel() {
   }, MOBILE_FEATURED_SCROLL_MS);
 }
 
+function getListViewWindow(events) {
+  if (!events.length) return [];
+  const start = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
+  const end = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 2, 0, 23, 59, 59, 999);
+  return events.filter((event) => {
+    const eventStart = event.date_start ? new Date(event.date_start) : null;
+    const eventEnd = eventEndsAt(event) || eventStart;
+    if (!eventStart || Number.isNaN(eventStart.getTime()) || !eventEnd || Number.isNaN(eventEnd.getTime())) return false;
+    return eventStart <= end && eventEnd >= start;
+  });
+}
+
+function buildListTile(event) {
+  const tile = document.createElement("article");
+  tile.className = "event-tile";
+  if (event.is_system_holiday) {
+    tile.classList.add("event-tile-holiday");
+    if (event.is_bank_holiday) tile.classList.add("event-tile-bank-holiday");
+    applyHolidayPaletteStyles(tile, event);
+  }
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "event-tile-button";
+
+  const titleText = pickText(event, "title") || "Untitled";
+  const eventImageUrl = getEventImages(event)[0] || "";
+  if (eventImageUrl) {
+    const image = document.createElement("img");
+    image.className = "event-tile-image";
+    image.src = eventImageUrl;
+    image.alt = titleText;
+    image.loading = "lazy";
+    button.appendChild(image);
+  } else {
+    const fallback = document.createElement("div");
+    fallback.className = "event-tile-fallback";
+    fallback.textContent = titleText;
+    button.appendChild(fallback);
+  }
+
+  const body = document.createElement("div");
+  body.className = "event-tile-body";
+  const title = document.createElement("h3");
+  title.textContent = titleText;
+  const date = document.createElement("p");
+  date.className = "event-tile-date";
+  date.textContent = formatDateRange(event.date_start, event.date_end, event.all_day);
+  const location = document.createElement("p");
+  location.className = "event-tile-location";
+  location.textContent = pickText(event, "location") || formatAreaLabel(event.area) || "";
+  body.append(title, date, location);
+
+  const badges = [...getHolidayBadgeLabels(event)];
+  if (event.recurrence_group_id) badges.push("Recurring");
+  if (badges.length) {
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "event-tile-badges";
+    badges.forEach((badgeLabel) => {
+      const badge = document.createElement("span");
+      badge.className = "event-tile-badge";
+      badge.textContent = badgeLabel;
+      badgeRow.appendChild(badge);
+    });
+    body.appendChild(badgeRow);
+  }
+
+  button.appendChild(body);
+  button.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: button }));
+  tile.appendChild(button);
+  return tile;
+}
+
 function renderEvents() {
   const events = filterEvents();
+  const listEvents = state.viewMode === "list" ? getListViewWindow(events) : events;
   eventList.innerHTML = "";
-  resultsCount.textContent = `${events.length} ${uiStrings[state.uiLang].results}`;
-  if (!events.length) {
+  eventList.classList.toggle("event-tile-grid", state.viewMode === "list");
+  resultsCount.textContent = `${listEvents.length} ${uiStrings[state.uiLang].results}`;
+  if (!listEvents.length) {
     const empty = document.createElement("div");
     empty.className = "notice";
-    empty.textContent = "No events match these filters yet.";
+    empty.textContent = state.viewMode === "list"
+      ? "No events match these filters in this two-month window yet."
+      : "No events match these filters yet.";
     eventList.appendChild(empty);
     return;
   }
 
-  events.forEach((event) => {
+  if (state.viewMode === "list") {
+    listEvents.forEach((event) => {
+      eventList.appendChild(buildListTile(event));
+    });
+    return;
+  }
+
+  listEvents.forEach((event) => {
     const card = document.createElement("div");
     card.className = "card";
     if (event.is_system_holiday) {
@@ -2181,7 +2265,8 @@ function buildDayPanelEventCard(event, meta, isExpanded) {
       ${badges.length ? `<div class="calendar-day-event-badges">${badges.map((badge) => `<span class="calendar-day-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
     </div>
   `;
-  summary.addEventListener("click", () => {
+  summary.addEventListener("click", (eventObject) => {
+    eventObject.stopPropagation();
     state.expandedCalendarEventId = isExpanded ? "" : String(event.id);
     render();
   });
@@ -2199,6 +2284,10 @@ function buildDayPanelEventCard(event, meta, isExpanded) {
     card.appendChild(detailWrap);
   }
 
+  card.addEventListener("click", (eventObject) => {
+    eventObject.stopPropagation();
+  });
+
   return card;
 }
 
@@ -2206,6 +2295,9 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   const panel = document.createElement("section");
   panel.className = "calendar-day-focus";
   panel.dataset.dateKey = toDateKey(selectedDate);
+  panel.addEventListener("click", (eventObject) => {
+    eventObject.stopPropagation();
+  });
   const strings = uiStrings[state.uiLang];
   const dayLabel = selectedDate.toLocaleDateString(state.uiLang, {
     weekday: "long",
@@ -2227,15 +2319,7 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   summary.className = "calendar-day-focus-summary";
   summary.textContent = getCalendarCountLabel(events.length);
   headingWrap.append(kicker, title, summary);
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "secondary calendar-day-focus-close";
-  close.textContent = strings.closeDay;
-  close.addEventListener("click", () => {
-    clearCalendarDayFocus();
-    render();
-  });
-  header.append(headingWrap, close);
+  header.append(headingWrap);
   panel.appendChild(header);
 
   if (!events.length) {
@@ -2257,44 +2341,6 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   });
   panel.appendChild(grid);
   return panel;
-}
-
-function positionCalendarDayFocus(wrapper, grid, selectedCell, panel) {
-  if (!selectedCell || !panel) {
-    wrapper.style.removeProperty("--calendar-day-focus-reserve");
-    return;
-  }
-
-  const wrapperWidth = wrapper.clientWidth;
-  const selectedWidth = selectedCell.offsetWidth;
-  const viewportMobile = isMobileViewport();
-  const horizontalPadding = viewportMobile ? 8 : 14;
-  const maxWidth = Math.max(280, wrapperWidth - horizontalPadding * 2);
-  let panelWidth;
-
-  if (viewportMobile) {
-    panelWidth = maxWidth;
-  } else if (wrapperWidth <= 920) {
-    panelWidth = Math.min(maxWidth, Math.max(selectedWidth * 2.55, 560));
-  } else {
-    panelWidth = Math.min(maxWidth, Math.max(selectedWidth * 3.1, 760));
-  }
-
-  const cellLeft = selectedCell.offsetLeft;
-  const preferredLeft = cellLeft;
-  const absoluteLeft = Math.max(horizontalPadding, Math.min(preferredLeft, wrapperWidth - panelWidth - horizontalPadding));
-  const relativeLeft = absoluteLeft - cellLeft;
-  const relativeTop = 0;
-
-  selectedCell.style.setProperty("--calendar-day-focus-left", `${relativeLeft}px`);
-  selectedCell.style.setProperty("--calendar-day-focus-top", `${relativeTop}px`);
-  selectedCell.style.setProperty("--calendar-day-focus-width", `${panelWidth}px`);
-
-  requestAnimationFrame(() => {
-    const panelBottom = selectedCell.offsetTop + panel.offsetHeight;
-    const reserve = Math.max(0, panelBottom - (grid.offsetTop + grid.offsetHeight) + 16);
-    wrapper.style.setProperty("--calendar-day-focus-reserve", `${reserve}px`);
-  });
 }
 
 function getMonthCalendarMetrics(days, grouped) {
@@ -2347,96 +2393,111 @@ function renderCalendarMonth(events) {
   nav.append(prev, next);
   header.append(title, nav);
 
-  const grid = document.createElement("div");
-  grid.className = "calendar-grid calendar-month-grid";
+  const weekdays = document.createElement("div");
+  weekdays.className = "calendar-grid calendar-month-weekdays";
   const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   dayNames.forEach((day) => {
     const el = document.createElement("div");
     el.className = "calendar-day";
     el.textContent = day;
-    grid.appendChild(el);
+    weekdays.appendChild(el);
   });
 
-  days.forEach((date) => {
-    const key = toDateKey(date);
-    const cell = document.createElement("div");
-    cell.className = "calendar-cell";
-    cell.dataset.dateKey = key;
-    const isSelectedDay = state.selectedCalendarDayKey === key;
-    if (isSelectedDay) cell.classList.add("is-active", "is-expanded");
-    const isOutsideCurrentMonth = date < monthStart || date > monthEnd;
-    if (isOutsideCurrentMonth) cell.classList.add("inactive");
-    const cellShell = document.createElement("div");
-    cellShell.className = "calendar-cell-shell";
-    const dateLabel = document.createElement("div");
-    dateLabel.className = "calendar-date";
-    dateLabel.textContent = date.getDate();
-    const eventsWrap = document.createElement("div");
-    eventsWrap.className = "calendar-events";
-    const items = grouped[key] || [];
-    const bankHoliday = items.find((event) => event.is_bank_holiday);
-    if (bankHoliday) {
-      cell.classList.add("calendar-cell-bank-holiday");
-      cell.style.setProperty("--calendar-bank-holiday-bg", bankHoliday.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg);
-      cell.style.setProperty("--calendar-bank-holiday-border", bankHoliday.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder);
-    }
-    items.slice(0, visibleChipLimit).forEach((event) => {
-      const chip = document.createElement("div");
-      chip.className = "calendar-chip";
-      if (event.is_bank_holiday) {
-        chip.classList.add("calendar-chip-bank-holiday");
-        chip.style.setProperty("--holiday-chip-bg", event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg);
-        chip.style.setProperty("--holiday-chip-ink", event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk);
-      } else if (event.is_system_holiday) {
-        chip.classList.add("calendar-chip-holiday");
+  const rowsWrap = document.createElement("div");
+  rowsWrap.className = "calendar-month-rows";
+
+  for (let weekIndex = 0; weekIndex < 6; weekIndex += 1) {
+    const row = document.createElement("div");
+    row.className = "calendar-month-row";
+    const weekDates = days.slice(weekIndex * 7, weekIndex * 7 + 7);
+    let hasExpandedDay = false;
+
+    weekDates.forEach((date) => {
+      const key = toDateKey(date);
+      const cell = document.createElement("div");
+      cell.className = "calendar-cell";
+      cell.dataset.dateKey = key;
+      const isSelectedDay = state.selectedCalendarDayKey === key;
+      if (isSelectedDay) {
+        cell.classList.add("is-active", "is-expanded");
+        hasExpandedDay = true;
       }
-      chip.title = pickText(event, "title");
-      chip.textContent = pickText(event, "title");
-      eventsWrap.appendChild(chip);
-    });
-    if (items.length > visibleChipLimit) {
-      const more = document.createElement("div");
-      more.className = "calendar-chip";
-      more.textContent = `+${items.length - visibleChipLimit} more`;
-      eventsWrap.appendChild(more);
-    }
-    cell.addEventListener("click", () => {
-      if (isOutsideCurrentMonth) {
-        state.calendarDate = new Date(date.getFullYear(), date.getMonth(), 1);
-        openCalendarDayAfterRender(date);
-        return;
+      const isOutsideCurrentMonth = date < monthStart || date > monthEnd;
+      if (isOutsideCurrentMonth) cell.classList.add("inactive");
+      const cellShell = document.createElement("div");
+      cellShell.className = "calendar-cell-shell";
+      const dateLabel = document.createElement("div");
+      dateLabel.className = "calendar-date";
+      dateLabel.textContent = date.getDate();
+      const eventsWrap = document.createElement("div");
+      eventsWrap.className = "calendar-events";
+      const items = grouped[key] || [];
+      const sortedItems = getSortedDayEvents(items);
+      const bankHoliday = items.find((event) => event.is_bank_holiday);
+      if (bankHoliday) {
+        cell.classList.add("calendar-cell-bank-holiday");
+        cell.style.setProperty("--calendar-bank-holiday-bg", bankHoliday.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg);
+        cell.style.setProperty("--calendar-bank-holiday-border", bankHoliday.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder);
       }
-      if (state.selectedCalendarDayKey === key) {
-        clearCalendarDayFocus();
+      if (!isSelectedDay) {
+        sortedItems.slice(0, visibleChipLimit).forEach((event) => {
+          const chip = document.createElement("div");
+          chip.className = "calendar-chip";
+          if (event.is_bank_holiday) {
+            chip.classList.add("calendar-chip-bank-holiday");
+            chip.style.setProperty("--holiday-chip-bg", event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg);
+            chip.style.setProperty("--holiday-chip-ink", event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk);
+          } else if (event.is_system_holiday) {
+            chip.classList.add("calendar-chip-holiday");
+          }
+          chip.title = pickText(event, "title");
+          chip.textContent = pickText(event, "title");
+          eventsWrap.appendChild(chip);
+        });
+        if (items.length > visibleChipLimit) {
+          const more = document.createElement("div");
+          more.className = "calendar-chip";
+          more.textContent = `+${items.length - visibleChipLimit} more`;
+          eventsWrap.appendChild(more);
+        }
+      } else {
+        const summaryChip = document.createElement("div");
+        summaryChip.className = "calendar-chip calendar-chip-active-summary";
+        summaryChip.textContent = getCalendarCountLabel(items.length);
+        eventsWrap.appendChild(summaryChip);
+        cell.style.setProperty("--calendar-expanded-min-height", `${Math.max(cellHeight * (isMobileViewport() ? 2.7 : 2.9), 260)}px`);
+        cell.style.setProperty("--calendar-expanded-flex", isMobileViewport() ? "3.6" : "3");
+      }
+      cell.addEventListener("click", () => {
+        if (isOutsideCurrentMonth) {
+          state.calendarDate = new Date(date.getFullYear(), date.getMonth(), 1);
+          openCalendarDayAfterRender(date);
+          return;
+        }
+        if (state.selectedCalendarDayKey === key) {
+          clearCalendarDayFocus();
+          render();
+          return;
+        }
+        state.selectedCalendarDayKey = key;
+        state.expandedCalendarEventId = "";
         render();
-        return;
+      });
+      cellShell.append(dateLabel, eventsWrap);
+      cell.appendChild(cellShell);
+      if (isSelectedDay) {
+        cell.appendChild(buildCalendarDayFocusPanel(date, sortedItems));
       }
-      state.selectedCalendarDayKey = key;
-      state.expandedCalendarEventId = "";
-      render();
+      row.appendChild(cell);
     });
-    cellShell.append(dateLabel, eventsWrap);
-    cell.appendChild(cellShell);
-    if (isSelectedDay) {
-      const expansion = document.createElement("div");
-      expansion.className = "calendar-cell-expansion";
-      const focusPanel = buildCalendarDayFocusPanel(date, items);
-      expansion.appendChild(focusPanel);
-      cell.appendChild(expansion);
-      positionCalendarDayFocus(wrapper, grid, cell, focusPanel);
-    }
-    grid.appendChild(cell);
-  });
 
-  if (state.selectedCalendarDayKey) {
-    grid.classList.add("has-expanded-day");
+    if (hasExpandedDay) row.classList.add("has-expanded-day");
+    rowsWrap.appendChild(row);
   }
-  attachMonthSwipeNavigation(grid);
-  wrapper.append(header, grid);
+
+  attachMonthSwipeNavigation(rowsWrap);
+  wrapper.append(header, weekdays, rowsWrap);
   calendarView.appendChild(wrapper);
-  if (!state.selectedCalendarDayKey) {
-    wrapper.style.setProperty("--calendar-day-focus-reserve", "0px");
-  }
 }
 
 function renderCalendarWeek(events) {
