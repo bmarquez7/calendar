@@ -1231,12 +1231,6 @@ section {
   box-shadow: 0 8px 20px rgba(31, 26, 20, 0.06);
 }
 
-.calendar-day-event-card.is-expanded {
-  border-color: rgba(200, 101, 42, 0.48);
-  box-shadow: 0 16px 34px rgba(31, 26, 20, 0.12);
-  grid-column: 1 / -1;
-}
-
 .calendar-day-event-card-holiday {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.86)),
@@ -1316,35 +1310,10 @@ section {
   letter-spacing: 0.02em;
 }
 
-.calendar-day-event-detail {
-  padding: 0 10px 10px;
-}
-
-.calendar-day-event-detail-actions {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 10px;
-}
-
-.calendar-day-event-open-button {
-  min-height: 34px;
-  padding: 7px 11px;
-  font-size: 12px;
-}
-
 .calendar-day-event-card-holiday .calendar-day-event-badge {
   border-color: var(--holiday-border, var(--border));
   background: var(--holiday-pill-bg, rgba(255, 255, 255, 0.92));
   color: var(--holiday-pill-ink, var(--brand-dark));
-}
-
-.calendar-day-event-detail {
-  padding: 0 12px 14px;
-  border-top: 1px solid rgba(224, 215, 198, 0.72);
-}
-
-.calendar-day-event-detail .event-detail-shell {
-  padding-top: 12px;
 }
 
 @keyframes dayFocusAppear {
@@ -2770,10 +2739,6 @@ section {
 
   .calendar-day-event-copy h4 {
     font-size: 20px;
-  }
-
-  .calendar-day-event-detail {
-    padding: 0 10px 12px;
   }
 
   .table {

@@ -251,7 +251,6 @@ const state = {
   calendarDate: new Date(),
   weekStart: null,
   selectedCalendarDayKey: "",
-  expandedCalendarEventId: "",
   filters: {
     search: "",
     eventType: [],
@@ -2211,7 +2210,6 @@ function getCalendarCountLabel(count) {
 
 function clearCalendarDayFocus() {
   state.selectedCalendarDayKey = "";
-  state.expandedCalendarEventId = "";
 }
 
 function shiftCalendarMonth(monthOffset) {
@@ -2222,7 +2220,6 @@ function shiftCalendarMonth(monthOffset) {
 
 function openCalendarDayAfterRender(date) {
   state.selectedCalendarDayKey = toDateKey(date);
-  state.expandedCalendarEventId = "";
   render();
 }
 
@@ -2276,11 +2273,10 @@ function getDayPanelBadges(event, meta) {
   return badges;
 }
 
-function buildDayPanelEventCard(event, meta, isExpanded) {
+function buildDayPanelEventCard(event, meta) {
   const card = document.createElement("article");
   card.className = "calendar-day-event-card";
   card.dataset.eventId = String(event.id);
-  if (isExpanded) card.classList.add("is-expanded");
   if (event.is_system_holiday) {
     card.classList.add("calendar-day-event-card-holiday");
     applyHolidayPaletteStyles(card, event);
@@ -2307,38 +2303,9 @@ function buildDayPanelEventCard(event, meta, isExpanded) {
   `;
   summary.addEventListener("click", (eventObject) => {
     eventObject.stopPropagation();
-    if (isExpanded) {
-      openModal(eventDetailHtml(event), { anchorEl: summary });
-      return;
-    }
-    state.expandedCalendarEventId = String(event.id);
-    render();
+    openModal(eventDetailHtml(event), { anchorEl: summary });
   });
   card.appendChild(summary);
-
-  if (isExpanded) {
-    const detailWrap = document.createElement("div");
-    detailWrap.className = "calendar-day-event-detail";
-    const detail = createEventDetailContent(event);
-    detailWrap.innerHTML = detail.html;
-    detail.mount(detailWrap);
-    detailWrap.querySelectorAll("a").forEach((link) => {
-      link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
-    });
-    const detailActions = document.createElement("div");
-    detailActions.className = "calendar-day-event-detail-actions";
-    const openEventButton = document.createElement("button");
-    openEventButton.type = "button";
-    openEventButton.className = "secondary calendar-day-event-open-button";
-    openEventButton.textContent = "Open full event";
-    openEventButton.addEventListener("click", (eventObject) => {
-      eventObject.stopPropagation();
-      openModal(eventDetailHtml(event), { anchorEl: openEventButton });
-    });
-    detailActions.appendChild(openEventButton);
-    detailWrap.appendChild(detailActions);
-    card.appendChild(detailWrap);
-  }
 
   card.addEventListener("click", (eventObject) => {
     eventObject.stopPropagation();
@@ -2392,8 +2359,7 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   grid.className = "calendar-day-focus-grid";
   sortedEvents.forEach((event) => {
     const meta = groupMeta.get(String(event.id)) || { bucketCount: 1, isRecurring: false };
-    const isExpanded = state.expandedCalendarEventId === String(event.id);
-    grid.appendChild(buildDayPanelEventCard(event, meta, isExpanded));
+    grid.appendChild(buildDayPanelEventCard(event, meta));
   });
   panel.appendChild(grid);
   return panel;
@@ -2536,7 +2502,6 @@ function renderCalendarMonth(events) {
           return;
         }
         state.selectedCalendarDayKey = key;
-        state.expandedCalendarEventId = "";
         render();
       });
       cellShell.append(dateLabel, eventsWrap);
