@@ -6,8 +6,11 @@
     "import:google:places": "node import_google_places.mjs"
   },
   "dependencies": {
-    "rss-parser": "^3.13.0",
+    "dotenv": "^16.4.5",
     "node-ical": "^0.20.0",
-    "dotenv": "^16.4.5"
+    "rss-parser": "^3.13.0"
+  },
+  "overrides": {
+    "follow-redirects": "^1.15.12"
   }
 }
