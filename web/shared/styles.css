@@ -641,9 +641,11 @@ section {
   min-height: 320px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: inherit;
+  border: 1px solid var(--event-tile-badge-border, var(--border));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02)),
+    var(--event-tile-bg, var(--surface));
+  color: var(--event-tile-ink, inherit);
   box-shadow: var(--shadow);
   display: grid;
   grid-template-rows: 160px 1fr;
@@ -652,8 +654,10 @@ section {
 }
 
 .event-tile-button:hover {
-  background: var(--surface);
-  color: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04)),
+    var(--event-tile-bg, var(--surface));
+  color: var(--event-tile-ink, inherit);
   transform: translateY(-1px);
 }
 
@@ -666,7 +670,9 @@ section {
 
 .event-tile-image {
   object-fit: contain;
-  background: rgba(11, 18, 27, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--event-tile-bg, rgba(11, 18, 27, 0.08));
   border-bottom: 1px solid rgba(224, 215, 198, 0.72);
 }
 
@@ -690,6 +696,7 @@ section {
   gap: 6px;
   align-content: start;
   grid-template-rows: auto auto auto 1fr;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0));
 }
 
 .event-tile-body h3 {
@@ -697,6 +704,7 @@ section {
   font-family: var(--font-title);
   font-size: 19px;
   line-height: 1.05;
+  color: var(--event-tile-ink, var(--brand-dark));
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -706,7 +714,7 @@ section {
 .event-tile-date,
 .event-tile-location {
   margin: 0;
-  color: var(--muted);
+  color: var(--event-tile-muted, var(--muted));
   font-size: 12px;
   line-height: 1.3;
   display: -webkit-box;
@@ -727,9 +735,9 @@ section {
   min-height: 22px;
   padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--brand-dark);
+  border: 1px solid var(--event-tile-badge-border, var(--border));
+  background: var(--event-tile-badge-bg, rgba(255, 255, 255, 0.92));
+  color: var(--event-tile-badge-ink, var(--brand-dark));
   font-size: 10px;
   font-weight: 700;
 }

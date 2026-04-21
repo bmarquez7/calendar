@@ -868,6 +868,49 @@ function rgbString({ r, g, b }) {
   return `rgb(${clampColorChannel(r)}, ${clampColorChannel(g)}, ${clampColorChannel(b)})`;
 }
 
+function parseRgbString(value) {
+  const match = String(value || "").match(/rgb\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)/i);
+  if (!match) return null;
+  return {
+    r: clampColorChannel(match[1]),
+    g: clampColorChannel(match[2]),
+    b: clampColorChannel(match[3])
+  };
+}
+
+function mixRgb(base, target, amount = 0.5) {
+  const ratio = Math.max(0, Math.min(1, Number(amount) || 0));
+  return {
+    r: (base.r * (1 - ratio)) + (target.r * ratio),
+    g: (base.g * (1 - ratio)) + (target.g * ratio),
+    b: (base.b * (1 - ratio)) + (target.b * ratio)
+  };
+}
+
+function buildEventTilePalette(colorValue) {
+  const rgb = parseRgbString(colorValue) || { r: 238, g: 230, b: 216 };
+  const luminance = ((0.2126 * rgb.r) + (0.7152 * rgb.g) + (0.0722 * rgb.b)) / 255;
+  const darkInk = { r: 31, g: 26, b: 20 };
+  const lightInk = { r: 255, g: 255, b: 255 };
+  const inkRgb = luminance > 0.63 ? darkInk : lightInk;
+  const mutedRgb = mixRgb(inkRgb, rgb, luminance > 0.63 ? 0.22 : 0.28);
+  const badgeBase = luminance > 0.63
+    ? mixRgb(rgb, lightInk, 0.68)
+    : mixRgb(rgb, lightInk, 0.14);
+  const borderBase = luminance > 0.63
+    ? mixRgb(rgb, darkInk, 0.24)
+    : mixRgb(rgb, lightInk, 0.16);
+
+  return {
+    bg: rgbString(rgb),
+    ink: rgbString(inkRgb),
+    muted: rgbString(mutedRgb),
+    badgeBg: rgbString(badgeBase),
+    badgeBorder: rgbString(borderBase),
+    badgeInk: rgbString(inkRgb)
+  };
+}
+
 function fallbackAverageColor(data) {
   let totalWeight = 0;
   let r = 0;
@@ -972,6 +1015,44 @@ function applyFeaturedPosterColor(box, imageUrl, image) {
   }, { once: true });
 }
 
+function applyEventTileColor(button, imageUrl, image) {
+  const applyPalette = (colorValue) => {
+    const palette = buildEventTilePalette(colorValue);
+    button.style.setProperty("--event-tile-bg", palette.bg);
+    button.style.setProperty("--event-tile-ink", palette.ink);
+    button.style.setProperty("--event-tile-muted", palette.muted);
+    button.style.setProperty("--event-tile-badge-bg", palette.badgeBg);
+    button.style.setProperty("--event-tile-badge-border", palette.badgeBorder);
+    button.style.setProperty("--event-tile-badge-ink", palette.badgeInk);
+  };
+
+  const cached = featuredColorCache.get(imageUrl);
+  if (cached) {
+    applyPalette(cached);
+    return;
+  }
+
+  const updateColor = () => {
+    try {
+      const color = extractProminentColor(image);
+      featuredColorCache.set(imageUrl, color);
+      applyPalette(color);
+    } catch {
+      applyPalette("rgb(238, 230, 216)");
+    }
+  };
+
+  if (image.complete && image.naturalWidth > 0) {
+    updateColor();
+    return;
+  }
+
+  image.addEventListener("load", updateColor, { once: true });
+  image.addEventListener("error", () => {
+    applyPalette("rgb(238, 230, 216)");
+  }, { once: true });
+}
+
 function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -1029,9 +1110,6 @@ function syncModalPlacement() {
   const rect = activeModalAnchorRect || (activeModalAnchor ? activeModalAnchor.getBoundingClientRect() : null);
   if (rect) {
     const modalHeight = Math.max(220, Math.min(modalContent?.offsetHeight || (mobileViewport ? 360 : 480), viewportHeight - topGap - bottomGap));
-    const modalWidth = Math.max(280, Math.min(modalContent?.offsetWidth || Math.min(760, viewportWidth - (sideGap * 2)), viewportWidth - (sideGap * 2)));
-    const minLeft = sideGap + (modalWidth / 2);
-    const maxLeft = viewportWidth - sideGap - (modalWidth / 2);
     const anchorCenter = rect.left + (rect.width / 2);
     const roomBelow = viewportHeight - rect.bottom - bottomGap;
     const roomAbove = rect.top - topGap;
@@ -1046,8 +1124,9 @@ function syncModalPlacement() {
       minTop,
       maxTop
     );
-    nextLeft = Math.round(clamp(anchorCenter, minLeft, maxLeft));
+    nextLeft = Math.round(viewportWidth / 2);
 
+    const modalWidth = Math.max(280, Math.min(modalContent?.offsetWidth || Math.min(760, viewportWidth - (sideGap * 2)), viewportWidth - (sideGap * 2)));
     const modalLeftEdge = nextLeft - (modalWidth / 2);
     const originXPx = clamp(anchorCenter - modalLeftEdge, 24, modalWidth - 24);
     originX = Math.round((originXPx / modalWidth) * 100);
@@ -1920,6 +1999,7 @@ function buildListTile(event) {
     image.src = eventImageUrl;
     image.alt = titleText;
     image.loading = "lazy";
+    applyEventTileColor(button, eventImageUrl, image);
     button.appendChild(image);
   } else {
     const fallback = document.createElement("div");
