@@ -719,6 +719,9 @@ section {
 .calendar-chip-holiday {
   background: rgba(255, 248, 236, 0.95);
   border-color: rgba(200, 101, 42, 0.24);
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  font-weight: 700;
 }
 
 .calendar-chip-bank-holiday {
@@ -726,6 +729,8 @@ section {
   border-color: var(--calendar-bank-holiday-border, rgba(109, 154, 216, 0.42));
   color: var(--holiday-chip-ink, #295e97);
   font-weight: 700;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
 }
 
 .calendar-week {
@@ -827,6 +832,12 @@ section {
 .modal-event h4 {
   margin: 0 0 6px;
   font-family: var(--font-title);
+}
+
+.modal-event-holiday h4,
+.event-detail-holiday #modal-title {
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
 }
 
 .modal-event-badges {
