@@ -250,6 +250,8 @@ const state = {
   viewMode: "month",
   calendarDate: new Date(),
   weekStart: null,
+  selectedCalendarDayKey: "",
+  expandedCalendarEventId: "",
   filters: {
     search: "",
     eventType: "",
@@ -282,6 +284,10 @@ const uiStrings = {
       price_asc: "Price (lowest)",
       price_desc: "Price (highest)"
     },
+    closeDay: "Close",
+    noEventsForDay: "No events for this day.",
+    eventSingular: "event",
+    eventPlural: "events",
     reset: "Reset filters",
     results: "events"
   },
@@ -305,6 +311,10 @@ const uiStrings = {
       price_asc: "Precio (más bajo)",
       price_desc: "Precio (más alto)"
     },
+    closeDay: "Cerrar",
+    noEventsForDay: "No hay eventos para este día.",
+    eventSingular: "evento",
+    eventPlural: "eventos",
     reset: "Restablecer filtros",
     results: "eventos"
   },
@@ -328,6 +338,10 @@ const uiStrings = {
       price_asc: "Çmimi (më i ulët)",
       price_desc: "Çmimi (më i lartë)"
     },
+    closeDay: "Mbylle",
+    noEventsForDay: "Nuk ka evente për këtë ditë.",
+    eventSingular: "event",
+    eventPlural: "evente",
     reset: "Pastro filtrat",
     results: "evente"
   }
@@ -1069,12 +1083,12 @@ function buildModalGallery(images, title) {
   `;
 }
 
-function mountModalGallery(images, titleText) {
+function mountGalleryIn(root, images, titleText) {
   if (images.length <= 1) return;
-  const image = modalBody.querySelector("[data-gallery-image]");
-  const counter = modalBody.querySelector("[data-gallery-counter]");
-  const prev = modalBody.querySelector("[data-gallery-prev]");
-  const next = modalBody.querySelector("[data-gallery-next]");
+  const image = root.querySelector("[data-gallery-image]");
+  const counter = root.querySelector("[data-gallery-counter]");
+  const prev = root.querySelector("[data-gallery-prev]");
+  const next = root.querySelector("[data-gallery-next]");
   if (!image || !counter || !prev || !next) return;
 
   let index = 0;
@@ -1099,7 +1113,11 @@ function mountModalGallery(images, titleText) {
   render();
 }
 
-function eventDetailHtml(event) {
+function mountModalGallery(images, titleText) {
+  mountGalleryIn(modalBody, images, titleText);
+}
+
+function createEventDetailContent(event, options = {}) {
   const titleText = pickText(event, "title") || "Untitled";
   const title = escapeHtml(titleText);
   const rawLocation = pickText(event, "location") || formatAreaLabel(event.area) || "";
@@ -1121,11 +1139,12 @@ function eventDetailHtml(event) {
   const holidayStyle = event.is_system_holiday
     ? ` style="--holiday-soft:${escapeHtml(event.holiday_cell_bg || HOLIDAY_PALETTES.civic.cellBg)};--holiday-border:${escapeHtml(event.holiday_cell_border || HOLIDAY_PALETTES.civic.cellBorder)};--holiday-pill-bg:${escapeHtml(event.holiday_chip_bg || HOLIDAY_PALETTES.civic.chipBg)};--holiday-pill-ink:${escapeHtml(event.holiday_chip_ink || HOLIDAY_PALETTES.civic.chipInk)};"`
     : "";
+  const titleId = options.titleId ? ` id="${options.titleId}"` : "";
   return {
     html: `
       <div class="event-detail-shell${holidayClass}"${holidayStyle}>
       ${buildHolidayBadgeHtml(event)}
-      <h3 id="modal-title">${title}</h3>
+      <h3${titleId}>${title}</h3>
       ${buildModalGallery(images, title)}
       <p>${description}</p>
       <div class="meta">
@@ -1138,10 +1157,34 @@ function eventDetailHtml(event) {
       ${links ? `<p>${links}</p>` : ""}
       </div>
     `,
-    onOpen() {
-      mountModalGallery(images, titleText);
+    mount(root) {
+      mountGalleryIn(root, images, titleText);
     }
   };
+}
+
+function eventDetailHtml(event) {
+  const detail = createEventDetailContent(event, { titleId: "modal-title" });
+  return {
+    html: detail.html,
+    onOpen() {
+      detail.mount(modalBody);
+    }
+  };
+}
+
+function getSortedDayEvents(events) {
+  const groupMeta = buildDayModalGroupMeta(events);
+  return [...events].sort((a, b) => {
+    const aMeta = groupMeta.get(String(a.id)) || { bucketCount: 1, isRecurring: false };
+    const bMeta = groupMeta.get(String(b.id)) || { bucketCount: 1, isRecurring: false };
+    const aGrouped = aMeta.isRecurring || aMeta.bucketCount > 1;
+    const bGrouped = bMeta.isRecurring || bMeta.bucketCount > 1;
+    if (aGrouped !== bGrouped) return aGrouped ? 1 : -1;
+    const dateDiff = new Date(a.date_start || 0) - new Date(b.date_start || 0);
+    if (dateDiff !== 0) return dateDiff;
+    return pickText(a, "title").localeCompare(pickText(b, "title"), state.uiLang);
+  });
 }
 
 function openDayModal(date, events, anchorEl = null) {
@@ -1153,16 +1196,7 @@ function openDayModal(date, events, anchorEl = null) {
   }
 
   const groupMeta = buildDayModalGroupMeta(events);
-  const sortedEvents = [...events].sort((a, b) => {
-    const aMeta = groupMeta.get(String(a.id)) || { bucketCount: 1, isRecurring: false };
-    const bMeta = groupMeta.get(String(b.id)) || { bucketCount: 1, isRecurring: false };
-    const aGrouped = aMeta.isRecurring || aMeta.bucketCount > 1;
-    const bGrouped = bMeta.isRecurring || bMeta.bucketCount > 1;
-    if (aGrouped !== bGrouped) return aGrouped ? 1 : -1;
-    const dateDiff = new Date(a.date_start || 0) - new Date(b.date_start || 0);
-    if (dateDiff !== 0) return dateDiff;
-    return pickText(a, "title").localeCompare(pickText(b, "title"), state.uiLang);
-  });
+  const sortedEvents = getSortedDayEvents(events);
 
   const items = sortedEvents
     .map(
@@ -1850,19 +1884,37 @@ function isMobileViewport() {
   return window.matchMedia("(max-width: 720px)").matches;
 }
 
+function getCalendarCountLabel(count) {
+  const strings = uiStrings[state.uiLang];
+  const noun = count === 1 ? strings.eventSingular : strings.eventPlural;
+  return `${count} ${noun}`;
+}
+
+function clearCalendarDayFocus() {
+  state.selectedCalendarDayKey = "";
+  state.expandedCalendarEventId = "";
+}
+
+function scrollCalendarDayFocusIntoView() {
+  requestAnimationFrame(() => {
+    const panel = calendarView.querySelector(".calendar-day-focus");
+    if (!panel) return;
+    const top = Math.max(0, panel.getBoundingClientRect().top + window.scrollY - 12);
+    window.scrollTo({ top, behavior: "smooth" });
+  });
+}
+
 function shiftCalendarMonth(monthOffset) {
+  clearCalendarDayFocus();
   state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + monthOffset, 1);
   render();
 }
 
 function openCalendarDayAfterRender(date) {
-  const targetKey = toDateKey(date);
-  requestAnimationFrame(() => {
-    const refreshedEvents = filterEvents();
-    const refreshedGrouped = groupEventsByDate(refreshedEvents);
-    const targetCell = calendarView.querySelector(`[data-date-key="${targetKey}"]`);
-    openDayModal(date, refreshedGrouped[targetKey] || [], targetCell || null);
-  });
+  state.selectedCalendarDayKey = toDateKey(date);
+  state.expandedCalendarEventId = "";
+  render();
+  scrollCalendarDayFocusIntoView();
 }
 
 function attachMonthSwipeNavigation(target) {
@@ -1908,6 +1960,117 @@ function attachMonthSwipeNavigation(target) {
   }, { passive: true });
 }
 
+function getDayPanelBadges(event, meta) {
+  const badges = [...getHolidayBadgeLabels(event)];
+  if (meta?.isRecurring) badges.push("Recurring");
+  if ((meta?.bucketCount || 1) > 1) badges.push(`Grouped x${meta.bucketCount}`);
+  return badges;
+}
+
+function buildDayPanelEventCard(event, meta, isExpanded) {
+  const card = document.createElement("article");
+  card.className = "calendar-day-event-card";
+  card.dataset.eventId = String(event.id);
+  if (isExpanded) card.classList.add("is-expanded");
+  if (event.is_system_holiday) {
+    card.classList.add("calendar-day-event-card-holiday");
+    applyHolidayPaletteStyles(card, event);
+  }
+
+  const summary = document.createElement("button");
+  summary.type = "button";
+  summary.className = "calendar-day-event-summary";
+
+  const titleText = pickText(event, "title") || "Untitled";
+  const eventImageUrl = getEventImages(event)[0] || "";
+  const badges = getDayPanelBadges(event, meta);
+
+  summary.innerHTML = `
+    ${eventImageUrl ? `<img class="calendar-day-event-thumb" src="${eventImageUrl}" alt="${escapeHtml(titleText)}" loading="lazy" />` : ""}
+    <div class="calendar-day-event-copy">
+      <h4>${escapeHtml(titleText)}</h4>
+      <div class="calendar-day-event-meta">
+        <span>${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
+        <span>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</span>
+      </div>
+      ${badges.length ? `<div class="calendar-day-event-badges">${badges.map((badge) => `<span class="calendar-day-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
+    </div>
+  `;
+  summary.addEventListener("click", () => {
+    state.expandedCalendarEventId = isExpanded ? "" : String(event.id);
+    render();
+  });
+  card.appendChild(summary);
+
+  if (isExpanded) {
+    const detailWrap = document.createElement("div");
+    detailWrap.className = "calendar-day-event-detail";
+    const detail = createEventDetailContent(event);
+    detailWrap.innerHTML = detail.html;
+    detail.mount(detailWrap);
+    detailWrap.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", (eventObject) => eventObject.stopPropagation());
+    });
+    card.appendChild(detailWrap);
+  }
+
+  return card;
+}
+
+function buildCalendarDayFocusPanel(selectedDate, events) {
+  const panel = document.createElement("section");
+  panel.className = "calendar-day-focus";
+  panel.dataset.dateKey = toDateKey(selectedDate);
+  const strings = uiStrings[state.uiLang];
+  const dayLabel = selectedDate.toLocaleDateString(state.uiLang, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const header = document.createElement("div");
+  header.className = "calendar-day-focus-header";
+  const headingWrap = document.createElement("div");
+  headingWrap.className = "calendar-day-focus-copy";
+  const title = document.createElement("h3");
+  title.textContent = dayLabel;
+  const summary = document.createElement("p");
+  summary.className = "calendar-day-focus-summary";
+  summary.textContent = getCalendarCountLabel(events.length);
+  headingWrap.append(title, summary);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "secondary calendar-day-focus-close";
+  close.textContent = strings.closeDay;
+  close.addEventListener("click", () => {
+    clearCalendarDayFocus();
+    render();
+  });
+  header.append(headingWrap, close);
+  panel.appendChild(header);
+
+  if (!events.length) {
+    const empty = document.createElement("div");
+    empty.className = "notice calendar-day-focus-empty";
+    empty.textContent = strings.noEventsForDay;
+    panel.appendChild(empty);
+    return panel;
+  }
+
+  const groupMeta = buildDayModalGroupMeta(events);
+  const sortedEvents = getSortedDayEvents(events);
+  const grid = document.createElement("div");
+  grid.className = "calendar-day-focus-grid";
+  sortedEvents.forEach((event) => {
+    const meta = groupMeta.get(String(event.id)) || { bucketCount: 1, isRecurring: false };
+    const isExpanded = state.expandedCalendarEventId === String(event.id);
+    grid.appendChild(buildDayPanelEventCard(event, meta, isExpanded));
+  });
+  panel.appendChild(grid);
+  return panel;
+}
+
 function getMonthCalendarMetrics(days, grouped) {
   const maxEvents = days.reduce((max, date) => Math.max(max, (grouped[toDateKey(date)] || []).length), 0);
   if (isMobileViewport()) {
@@ -1932,6 +2095,9 @@ function renderCalendarMonth(events) {
   const days = [];
   for (let i = 0; i < 42; i += 1) {
     days.push(addDays(gridStart, i));
+  }
+  if (state.selectedCalendarDayKey && !days.some((date) => toDateKey(date) === state.selectedCalendarDayKey)) {
+    clearCalendarDayFocus();
   }
   const { visibleChipLimit, cellHeight } = getMonthCalendarMetrics(days, grouped);
 
@@ -1970,6 +2136,7 @@ function renderCalendarMonth(events) {
     const cell = document.createElement("div");
     cell.className = "calendar-cell";
     cell.dataset.dateKey = key;
+    if (state.selectedCalendarDayKey === key) cell.classList.add("is-active");
     const isOutsideCurrentMonth = date < monthStart || date > monthEnd;
     if (isOutsideCurrentMonth) cell.classList.add("inactive");
     const dateLabel = document.createElement("div");
@@ -2007,11 +2174,18 @@ function renderCalendarMonth(events) {
     cell.addEventListener("click", () => {
       if (isOutsideCurrentMonth) {
         state.calendarDate = new Date(date.getFullYear(), date.getMonth(), 1);
-        render();
         openCalendarDayAfterRender(date);
         return;
       }
-      openDayModal(date, items, cell);
+      if (state.selectedCalendarDayKey === key) {
+        clearCalendarDayFocus();
+        render();
+        return;
+      }
+      state.selectedCalendarDayKey = key;
+      state.expandedCalendarEventId = "";
+      render();
+      scrollCalendarDayFocusIntoView();
     });
     cell.append(dateLabel, eventsWrap);
     grid.appendChild(cell);
@@ -2019,6 +2193,12 @@ function renderCalendarMonth(events) {
 
   attachMonthSwipeNavigation(grid);
   wrapper.append(header, grid);
+  if (state.selectedCalendarDayKey) {
+    const selectedDate = parseDateKey(state.selectedCalendarDayKey);
+    if (selectedDate) {
+      wrapper.appendChild(buildCalendarDayFocusPanel(selectedDate, grouped[state.selectedCalendarDayKey] || []));
+    }
+  }
   calendarView.appendChild(wrapper);
 }
 
@@ -2171,6 +2351,9 @@ viewControls.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-view]");
   if (!button) return;
   state.viewMode = button.dataset.view;
+  if (state.viewMode !== "month") {
+    clearCalendarDayFocus();
+  }
   [...viewControls.querySelectorAll("button[data-view]")].forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === state.viewMode);
   });
