@@ -254,8 +254,8 @@ const state = {
   expandedCalendarEventId: "",
   filters: {
     search: "",
-    eventType: "",
-    area: "",
+    eventType: [],
+    area: [],
     eventLanguage: "",
     dateFrom: "",
     dateTo: "",
@@ -348,7 +348,7 @@ const uiStrings = {
 };
 
 const filterControls = document.getElementById("filter-controls");
-const mobileSearchSlot = document.getElementById("mobile-search-slot");
+const searchSlot = document.getElementById("search-slot");
 const mobileFiltersButton = document.getElementById("mobile-filters-button");
 const mobileFilterPanel = document.getElementById("mobile-filter-panel");
 const mobileFilterControls = document.getElementById("mobile-filter-controls");
@@ -407,12 +407,7 @@ function applyTheme() {
   if (theme.featuredColsMobile) root.style.setProperty("--featured-cols-mobile", String(theme.featuredColsMobile));
 
   heroSection.classList.toggle("align-left", theme.heroAlign === "left");
-  if (theme.featuredPosition === "below_filters") {
-    heroSection.appendChild(featuredBox);
-  } else {
-    const controls = document.getElementById("filter-controls");
-    controls.insertAdjacentElement("afterend", featuredBox);
-  }
+  heroSection.appendChild(featuredBox);
 }
 
 function formatDateRange(start, end, allDay = false) {
@@ -1347,8 +1342,8 @@ function setFilterValue(name, value) {
 
 function activeMobileFilterCount() {
   let count = 0;
-  if (state.filters.eventType) count += 1;
-  if (state.filters.area) count += 1;
+  if (state.filters.eventType.length) count += 1;
+  if (state.filters.area.length) count += 1;
   if (state.filters.eventLanguage) count += 1;
   if (state.filters.dateFrom) count += 1;
   if (state.filters.dateTo) count += 1;
@@ -1359,7 +1354,15 @@ function activeMobileFilterCount() {
 function syncFilterInputs() {
   filterInputRegistry.forEach((elements, name) => {
     elements.forEach((element) => {
-      element.value = state.filters[name] || "";
+      const value = state.filters[name];
+      if (element instanceof HTMLSelectElement && element.multiple) {
+        const selectedValues = Array.isArray(value) ? value : [];
+        [...element.options].forEach((option) => {
+          option.selected = selectedValues.includes(option.value);
+        });
+        return;
+      }
+      element.value = Array.isArray(value) ? "" : (value || "");
     });
   });
   if (mobileFiltersButton) {
@@ -1385,12 +1388,17 @@ function createSelect(name, labelText, options, includeAny = true, config = {}) 
   const wrap = document.createElement("div");
   wrap.className = `control control-${name}`;
   if (config.compact) wrap.classList.add("control-compact");
+  if (config.multiple) wrap.classList.add("control-multi");
   const label = document.createElement("label");
   label.textContent = labelText;
   if (config.hideLabel) label.classList.add("visually-hidden");
   const select = document.createElement("select");
   select.name = name;
-  if (includeAny) {
+  if (config.multiple) {
+    select.multiple = true;
+    select.size = config.size || 6;
+  }
+  if (includeAny && !config.multiple) {
     const opt = document.createElement("option");
     opt.value = "";
     opt.textContent = "All";
@@ -1415,6 +1423,10 @@ function createSelect(name, labelText, options, includeAny = true, config = {}) 
     select.appendChild(opt);
   });
   select.addEventListener("change", (event) => {
+    if (select.multiple) {
+      setFilterValue(name, [...event.target.selectedOptions].map((option) => option.value));
+      return;
+    }
     setFilterValue(name, event.target.value);
   });
   registerFilterElement(name, select);
@@ -1446,13 +1458,19 @@ function createFilterDescriptors(strings) {
     {
       name: "eventType",
       render(config = {}) {
-        return createSelect("eventType", strings.filters.eventType, EVENT_TYPES.map((t) => ({ value: t, label: t })), true, config);
+        return createSelect(
+          "eventType",
+          strings.filters.eventType,
+          EVENT_TYPES.map((t) => ({ value: t, label: t })),
+          false,
+          { ...config, multiple: true, size: config.compact ? 5 : 6 }
+        );
       }
     },
     {
       name: "area",
       render(config = {}) {
-        return createSelect("area", strings.filters.area, AREA_GROUPS, true, config);
+        return createSelect("area", strings.filters.area, AREA_GROUPS, false, { ...config, multiple: true, size: config.compact ? 7 : 8 });
       }
     },
     {
@@ -1485,21 +1503,16 @@ function createFilterDescriptors(strings) {
 function renderFilters() {
   filterInputRegistry = new Map();
   filterControls.innerHTML = "";
-  if (mobileSearchSlot) mobileSearchSlot.innerHTML = "";
+  if (searchSlot) searchSlot.innerHTML = "";
   if (mobileFilterControls) mobileFilterControls.innerHTML = "";
   const strings = uiStrings[state.uiLang];
   const searchPlaceholder = "Search titles and descriptions";
   const filterDescriptors = createFilterDescriptors(strings);
 
-  filterControls.append(
-    createInput("search", strings.filters.search, "text", searchPlaceholder),
-    ...filterDescriptors.map((descriptor) => descriptor.render())
-  );
+  filterControls.append(...filterDescriptors.map((descriptor) => descriptor.render()));
 
-  if (mobileSearchSlot) {
-    mobileSearchSlot.appendChild(
-      createInput("search", strings.filters.search, "text", searchPlaceholder, { hideLabel: true, compact: true })
-    );
+  if (searchSlot) {
+    searchSlot.appendChild(createInput("search", strings.filters.search, "text", searchPlaceholder, { compact: true }));
   }
 
   if (mobileFilterControls) {
@@ -1517,8 +1530,8 @@ function filterEvents() {
     .filter((event) => {
       const searchText = `${pickText(event, "title")} ${pickText(event, "description")} ${pickText(event, "location")}`.toLowerCase();
       const matchesSearch = !search || searchText.includes(search.toLowerCase());
-      const matchesType = !eventType || event.event_type === eventType;
-      const matchesArea = !area || normalizeAreaValue(event.area) === area;
+      const matchesType = !eventType.length || eventType.includes(event.event_type);
+      const matchesArea = !area.length || area.includes(normalizeAreaValue(event.area));
       const matchesLanguage = !eventLanguage || (event.event_language || []).includes(eventLanguage);
       const startDate = event.date_start ? new Date(event.date_start) : null;
       const matchesFrom = !dateFrom || (startDate && startDate >= new Date(dateFrom));
@@ -2023,12 +2036,15 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   header.className = "calendar-day-focus-header";
   const headingWrap = document.createElement("div");
   headingWrap.className = "calendar-day-focus-copy";
+  const kicker = document.createElement("span");
+  kicker.className = "calendar-day-focus-kicker";
+  kicker.textContent = selectedDate.toLocaleDateString(state.uiLang, { day: "numeric", month: "short" });
   const title = document.createElement("h3");
   title.textContent = dayLabel;
   const summary = document.createElement("p");
   summary.className = "calendar-day-focus-summary";
   summary.textContent = getCalendarCountLabel(events.length);
-  headingWrap.append(title, summary);
+  headingWrap.append(kicker, title, summary);
   const close = document.createElement("button");
   close.type = "button";
   close.className = "secondary calendar-day-focus-close";
@@ -2061,15 +2077,13 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   return panel;
 }
 
-function positionCalendarDayFocus(wrapper, grid, layer, panel) {
-  const selectedCell = grid.querySelector(`[data-date-key="${state.selectedCalendarDayKey}"]`);
-  if (!selectedCell || !layer || !panel) {
+function positionCalendarDayFocus(wrapper, grid, selectedCell, panel) {
+  if (!selectedCell || !panel) {
     wrapper.style.removeProperty("--calendar-day-focus-reserve");
     return;
   }
 
   const wrapperWidth = wrapper.clientWidth;
-  const gridWidth = grid.clientWidth;
   const selectedWidth = selectedCell.offsetWidth;
   const viewportMobile = isMobileViewport();
   const horizontalPadding = viewportMobile ? 8 : 14;
@@ -2079,21 +2093,23 @@ function positionCalendarDayFocus(wrapper, grid, layer, panel) {
   if (viewportMobile) {
     panelWidth = maxWidth;
   } else if (wrapperWidth <= 920) {
-    panelWidth = Math.min(maxWidth, Math.max(Math.round(gridWidth * 0.82), 560));
+    panelWidth = Math.min(maxWidth, Math.max(selectedWidth * 2.55, 560));
   } else {
-    panelWidth = Math.min(maxWidth, Math.max(Math.round(gridWidth * 0.76), 760));
+    panelWidth = Math.min(maxWidth, Math.max(selectedWidth * 3.1, 760));
   }
 
-  const idealLeft = selectedCell.offsetLeft + selectedWidth / 2 - panelWidth / 2;
-  const left = Math.max(horizontalPadding, Math.min(idealLeft, wrapperWidth - panelWidth - horizontalPadding));
-  const top = grid.offsetTop + selectedCell.offsetTop - (viewportMobile ? 4 : 6);
+  const cellLeft = selectedCell.offsetLeft;
+  const preferredLeft = cellLeft;
+  const absoluteLeft = Math.max(horizontalPadding, Math.min(preferredLeft, wrapperWidth - panelWidth - horizontalPadding));
+  const relativeLeft = absoluteLeft - cellLeft;
+  const relativeTop = 0;
 
-  layer.style.setProperty("--calendar-day-focus-left", `${left}px`);
-  layer.style.setProperty("--calendar-day-focus-top", `${top}px`);
-  layer.style.setProperty("--calendar-day-focus-width", `${panelWidth}px`);
+  selectedCell.style.setProperty("--calendar-day-focus-left", `${relativeLeft}px`);
+  selectedCell.style.setProperty("--calendar-day-focus-top", `${relativeTop}px`);
+  selectedCell.style.setProperty("--calendar-day-focus-width", `${panelWidth}px`);
 
   requestAnimationFrame(() => {
-    const panelBottom = top + panel.offsetHeight;
+    const panelBottom = selectedCell.offsetTop + panel.offsetHeight;
     const reserve = Math.max(0, panelBottom - (grid.offsetTop + grid.offsetHeight) + 16);
     wrapper.style.setProperty("--calendar-day-focus-reserve", `${reserve}px`);
   });
@@ -2164,9 +2180,12 @@ function renderCalendarMonth(events) {
     const cell = document.createElement("div");
     cell.className = "calendar-cell";
     cell.dataset.dateKey = key;
-    if (state.selectedCalendarDayKey === key) cell.classList.add("is-active");
+    const isSelectedDay = state.selectedCalendarDayKey === key;
+    if (isSelectedDay) cell.classList.add("is-active", "is-expanded");
     const isOutsideCurrentMonth = date < monthStart || date > monthEnd;
     if (isOutsideCurrentMonth) cell.classList.add("inactive");
+    const cellShell = document.createElement("div");
+    cellShell.className = "calendar-cell-shell";
     const dateLabel = document.createElement("div");
     dateLabel.className = "calendar-date";
     dateLabel.textContent = date.getDate();
@@ -2214,24 +2233,26 @@ function renderCalendarMonth(events) {
       state.expandedCalendarEventId = "";
       render();
     });
-    cell.append(dateLabel, eventsWrap);
+    cellShell.append(dateLabel, eventsWrap);
+    cell.appendChild(cellShell);
+    if (isSelectedDay) {
+      const expansion = document.createElement("div");
+      expansion.className = "calendar-cell-expansion";
+      const focusPanel = buildCalendarDayFocusPanel(date, items);
+      expansion.appendChild(focusPanel);
+      cell.appendChild(expansion);
+      positionCalendarDayFocus(wrapper, grid, cell, focusPanel);
+    }
     grid.appendChild(cell);
   });
 
+  if (state.selectedCalendarDayKey) {
+    grid.classList.add("has-expanded-day");
+  }
   attachMonthSwipeNavigation(grid);
   wrapper.append(header, grid);
   calendarView.appendChild(wrapper);
-  if (state.selectedCalendarDayKey) {
-    const selectedDate = parseDateKey(state.selectedCalendarDayKey);
-    if (selectedDate) {
-      const focusLayer = document.createElement("div");
-      focusLayer.className = "calendar-day-focus-layer";
-      const focusPanel = buildCalendarDayFocusPanel(selectedDate, grouped[state.selectedCalendarDayKey] || []);
-      focusLayer.appendChild(focusPanel);
-      wrapper.appendChild(focusLayer);
-      positionCalendarDayFocus(wrapper, grid, focusLayer, focusPanel);
-    }
-  } else {
+  if (!state.selectedCalendarDayKey) {
     wrapper.style.setProperty("--calendar-day-focus-reserve", "0px");
   }
 }
@@ -2366,8 +2387,8 @@ async function loadSettings() {
 resetFilters.addEventListener("click", () => {
   state.filters = {
     search: "",
-    eventType: "",
-    area: "",
+    eventType: [],
+    area: [],
     eventLanguage: "",
     dateFrom: "",
     dateTo: "",
@@ -2398,9 +2419,18 @@ languageButton.addEventListener("click", () => {
   languageMenu.classList.toggle("hidden");
 });
 document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
   if (!languageButton.contains(event.target) && !languageMenu.contains(event.target)) {
     languageMenu.classList.add("hidden");
   }
+  if (state.viewMode !== "month" || !state.selectedCalendarDayKey) return;
+  const expandedCell = calendarView.querySelector(".calendar-cell.is-expanded");
+  if (!expandedCell) return;
+  if (!target) return;
+  if (expandedCell.contains(target)) return;
+  if (target.closest(".calendar-cell")) return;
+  clearCalendarDayFocus();
+  render();
 });
 UI_LANGS.forEach((lang) => {
   const button = document.createElement("button");

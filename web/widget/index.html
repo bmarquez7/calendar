@@ -29,22 +29,6 @@
         <p id="hero-subtitle">
           Discover culture, community, and nightlife across Tirana. Filter by area, type, language, date, and price.
         </p>
-        <div class="mobile-filter-bar" id="mobile-filter-bar">
-          <div id="mobile-search-slot" class="mobile-search-slot"></div>
-          <button
-            type="button"
-            class="secondary"
-            id="mobile-filters-button"
-            aria-expanded="false"
-            aria-controls="mobile-filter-panel"
-          >
-            Filters
-          </button>
-        </div>
-        <div id="mobile-filter-panel" class="mobile-filter-panel hidden">
-          <div id="mobile-filter-controls" class="mobile-filter-controls"></div>
-        </div>
-        <div class="controls" id="filter-controls"></div>
         <div class="featured-box">
           <h3 id="featured-title">Highlighted Events</h3>
           <div id="featured-grid" class="featured-grid"></div>
@@ -52,6 +36,26 @@
       </section>
 
       <section class="widget-calendar-section">
+        <div class="widget-filter-shell">
+          <div class="mobile-filter-bar" id="mobile-filter-bar">
+            <button
+              type="button"
+              class="secondary"
+              id="mobile-filters-button"
+              aria-expanded="false"
+              aria-controls="mobile-filter-panel"
+            >
+              Filters
+            </button>
+          </div>
+          <div id="mobile-filter-panel" class="mobile-filter-panel hidden">
+            <div id="mobile-filter-controls" class="mobile-filter-controls"></div>
+          </div>
+          <div class="controls widget-filter-controls" id="filter-controls"></div>
+          <div class="widget-search-row">
+            <div id="search-slot" class="widget-search-slot"></div>
+          </div>
+        </div>
         <div class="admin-bar widget-summary-bar" style="margin-bottom: 12px;">
           <span class="badge" id="results-count">0 events</span>
           <button class="secondary" id="reset-filters">Reset filters</button>
