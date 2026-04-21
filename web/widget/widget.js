@@ -352,6 +352,7 @@ const calendarView = document.getElementById("calendar-view");
 const eventModal = document.getElementById("event-modal");
 const modalBody = document.getElementById("modal-body");
 const modalClose = document.getElementById("modal-close");
+const modalContent = eventModal?.querySelector(".modal-content");
 const featuredColorCache = new Map();
 let filterInputRegistry = new Map();
 let featuredRotationTimer = null;
@@ -2150,7 +2151,9 @@ async function loadLanguageOptions() {
 }
 modalClose.addEventListener("click", closeModal);
 eventModal.addEventListener("click", (event) => {
-  if (event.target.dataset.closeModal === "true") {
+  if (!modalContent) return;
+  const clickedInsideContent = modalContent.contains(event.target);
+  if (!clickedInsideContent || event.target.dataset.closeModal === "true") {
     closeModal();
   }
 });
