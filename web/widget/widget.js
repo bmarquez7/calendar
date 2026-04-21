@@ -1015,21 +1015,24 @@ function linkifyText(value) {
 function syncModalPlacement() {
   if (eventModal.classList.contains("hidden")) return;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
   const mobileViewport = window.innerWidth <= 720;
   const defaultTop = mobileViewport ? 12 : Math.max(20, Math.round(viewportHeight * 0.08));
   let nextTop = defaultTop;
+  let nextLeft = Math.round(viewportWidth / 2);
 
   const rect = activeModalAnchorRect || (activeModalAnchor ? activeModalAnchor.getBoundingClientRect() : null);
   if (rect) {
-    const preferredTop = Math.round(rect.top + (mobileViewport ? 8 : 12));
-    const maxTop = mobileViewport
-      ? Math.max(16, viewportHeight - 220)
-      : Math.max(24, viewportHeight - 320);
-    const anchoredTopCap = defaultTop + (mobileViewport ? 56 : 80);
-    nextTop = Math.min(Math.max(defaultTop, preferredTop), Math.min(anchoredTopCap, maxTop));
+    const modalHeight = modalContent?.offsetHeight || (mobileViewport ? 360 : 480);
+    const bottomGap = mobileViewport ? 18 : 28;
+    const maxTop = Math.max(defaultTop, viewportHeight - modalHeight - bottomGap);
+    const preferredTop = Math.round(rect.top + (mobileViewport ? 6 : 10));
+    nextTop = Math.min(Math.max(defaultTop, preferredTop), maxTop);
+    nextLeft = Math.round(rect.left + rect.width / 2);
   }
 
   eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
+  eventModal.style.setProperty("--modal-anchor-left", `${nextLeft}px`);
 }
 
 function openModal(content, options = {}) {
@@ -1056,6 +1059,7 @@ function closeModal() {
   activeModalAnchor = null;
   activeModalAnchorRect = null;
   eventModal.style.removeProperty("--modal-anchor-top");
+  eventModal.style.removeProperty("--modal-anchor-left");
   document.body.classList.remove("modal-open");
 }
 
