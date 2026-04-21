@@ -2465,8 +2465,8 @@ function renderCalendarMonth(events) {
         summaryChip.className = "calendar-chip calendar-chip-active-summary";
         summaryChip.textContent = getCalendarCountLabel(items.length);
         eventsWrap.appendChild(summaryChip);
-        cell.style.setProperty("--calendar-expanded-min-height", `${Math.max(cellHeight * (isMobileViewport() ? 2.7 : 2.9), 260)}px`);
-        cell.style.setProperty("--calendar-expanded-flex", isMobileViewport() ? "3.6" : "3");
+        cell.style.setProperty("--calendar-expanded-min-height", `${Math.max(cellHeight * (isMobileViewport() ? 2.85 : 3.1), 280)}px`);
+        cell.style.setProperty("--calendar-expanded-flex", isMobileViewport() ? "7.5" : "14");
       }
       cell.addEventListener("click", () => {
         if (isOutsideCurrentMonth) {
