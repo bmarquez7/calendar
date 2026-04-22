@@ -784,8 +784,7 @@ function getSystemHolidayEvents() {
 }
 
 function getAllDisplayEvents() {
-  const now = new Date();
-  const holidays = getSystemHolidayEvents().filter((event) => isPublicEventActive(event, now));
+  const holidays = getSystemHolidayEvents();
   return dedupeEvents([...state.events, ...holidays]);
 }
 
@@ -1918,11 +1917,20 @@ function featuredFallbackSort(a, b) {
 }
 
 function getFeaturedCandidateEvents() {
+  const now = new Date();
   const selected = state.events
-    .filter((event) => event.is_highlighted && !event.feature_blocked && (isFeaturedEligibleArea(event.area) || event.feature_override) && !event.recurrence_group_id)
+    .filter((event) => isPublicEventActive(event, now)
+      && event.is_highlighted
+      && !event.feature_blocked
+      && (isFeaturedEligibleArea(event.area) || event.feature_override)
+      && !event.recurrence_group_id)
     .sort((a, b) => new Date(a.date_start || 0) - new Date(b.date_start || 0));
   const fallback = state.events
-    .filter((event) => !event.is_highlighted && !event.feature_blocked && isFeaturedEligibleArea(event.area) && !event.recurrence_group_id)
+    .filter((event) => isPublicEventActive(event, now)
+      && !event.is_highlighted
+      && !event.feature_blocked
+      && isFeaturedEligibleArea(event.area)
+      && !event.recurrence_group_id)
     .sort(featuredFallbackSort);
   return [...selected, ...fallback];
 }
@@ -2793,10 +2801,8 @@ async function loadEvents() {
     console.error(error);
     return;
   }
-  const now = new Date();
   state.events = dedupeEvents((data || [])
-    .map((event) => ({ ...event, area: normalizeAreaValue(event.area) }))
-    .filter((event) => isPublicEventActive(event, now)));
+    .map((event) => ({ ...event, area: normalizeAreaValue(event.area) })));
   render();
 }
 
