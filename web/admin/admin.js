@@ -532,18 +532,6 @@ function syncBulkSelectionUi() {
     adminSelectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
     adminSelectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
   }
-  const disabled = selectedVisibleCount === 0;
-  [
-    bulkApproveButton,
-    bulkPendingButton,
-    bulkDenyButton,
-    bulkNeedsInfoButton,
-    bulkHighlightButton,
-    bulkUnhighlightButton,
-    bulkDeleteButton
-  ].forEach((button) => {
-    if (button) button.disabled = disabled;
-  });
 
   adminTableBody?.querySelectorAll("tr").forEach((row) => {
     const rowIds = String(row.dataset.selectedIds || "")
@@ -893,7 +881,7 @@ function sortReviewEntries(entries) {
         primary = compareNumber(a.sortStatusRank, b.sortStatusRank);
         break;
       case "highlighted":
-        primary = compareNumber(Number(a.isHighlighted), Number(b.isHighlighted));
+        primary = compareNumber(entryHighlightState(a).rank, entryHighlightState(b).rank);
         break;
       case "area":
         primary = compareText(a.areaLabel, b.areaLabel);
@@ -907,6 +895,11 @@ function sortReviewEntries(entries) {
         break;
     }
     if (primary !== 0) return primary * direction;
+
+    if (adminQueueSortField === "highlighted" || adminQueueSortField === "date") {
+      const titleDiff = compareText(a.title, b.title);
+      if (titleDiff !== 0) return titleDiff;
+    }
 
     const fallbackStatus = compareNumber(a.sortStatusRank, b.sortStatusRank);
     if (fallbackStatus !== 0) return fallbackStatus;
@@ -1103,6 +1096,18 @@ function queueEntryStartsAt(entry) {
     .map((event) => dateValue(event.date_start))
     .filter(Boolean);
   return timestamps.length ? Math.min(...timestamps) : 0;
+}
+
+function entryHighlightState(entry) {
+  const events = entry.events || [];
+  const allPending = events.length > 0 && events.every((event) => String(event.status || "") === "pending");
+  if (allPending) {
+    return { label: "—", rank: 0 };
+  }
+  if (entry.featureBlocked) {
+    return { label: "Blocked", rank: 1 };
+  }
+  return { label: "Highlighted", rank: 2 };
 }
 
 async function uploadEventImage(file, folder) {
@@ -1843,28 +1848,13 @@ function renderTable() {
   }
 
   function renderFeatureState(cell, entry) {
-    const pills = [];
-    if (entry.isHighlighted) pills.push("Yes");
-    const overrideCount = Number(entry.featureOverrideCount || 0);
-    if (overrideCount > 0) {
-      pills.push(overrideCount === (entry.selectedIds?.length || 0) ? "Override" : `${overrideCount} override`);
-    }
-    const blockedCount = Number(entry.featureBlockedCount || 0);
-    if (blockedCount > 0) {
-      pills.push(blockedCount === (entry.selectedIds?.length || 0) ? "Blocked" : `${blockedCount} blocked`);
-    }
-    if (!pills.length) {
-      cell.textContent = "—";
-      return;
-    }
+    const state = entryHighlightState(entry);
     const wrap = document.createElement("div");
     wrap.className = "admin-status-summary";
-    pills.forEach((label) => {
-      const pill = document.createElement("span");
-      pill.className = "status-pill";
-      pill.textContent = label;
-      wrap.appendChild(pill);
-    });
+    const pill = document.createElement("span");
+    pill.className = "status-pill";
+    pill.textContent = state.label;
+    wrap.appendChild(pill);
     cell.appendChild(wrap);
   }
 

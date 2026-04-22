@@ -1000,6 +1000,17 @@ function personalizeTileColor(colorValue, seedValue = "") {
   return rgbString(mixRgb(base, accent, 0.16));
 }
 
+function applyEventSurfacePalette(elements, palette) {
+  elements.filter(Boolean).forEach((element) => {
+    element.style.setProperty("--event-tile-bg", palette.bg);
+    element.style.setProperty("--event-tile-ink", palette.ink);
+    element.style.setProperty("--event-tile-muted", palette.muted);
+    element.style.setProperty("--event-tile-badge-bg", palette.badgeBg);
+    element.style.setProperty("--event-tile-badge-border", palette.badgeBorder);
+    element.style.setProperty("--event-tile-badge-ink", palette.badgeInk);
+  });
+}
+
 function extractProminentColor(img, options = {}) {
   const { seed = "" } = options;
   const width = Math.max(12, Math.min(32, img.naturalWidth || 24));
@@ -1091,14 +1102,7 @@ function applyFeaturedPosterColor(box, imageUrl, image) {
 function applyEventTileColor(button, imageUrl, image, host = null) {
   const applyPalette = (colorValue) => {
     const palette = buildEventTilePalette(personalizeTileColor(colorValue, imageUrl));
-    [button, host, button.closest(".event-tile")].filter(Boolean).forEach((element) => {
-      element.style.setProperty("--event-tile-bg", palette.bg);
-      element.style.setProperty("--event-tile-ink", palette.ink);
-      element.style.setProperty("--event-tile-muted", palette.muted);
-      element.style.setProperty("--event-tile-badge-bg", palette.badgeBg);
-      element.style.setProperty("--event-tile-badge-border", palette.badgeBorder);
-      element.style.setProperty("--event-tile-badge-ink", palette.badgeInk);
-    });
+    applyEventSurfacePalette([button, host, button.closest(".event-tile")], palette);
   };
 
   const cached = featuredColorCache.get(imageUrl);
@@ -2075,14 +2079,7 @@ function buildListTile(event) {
     fallback.textContent = titleText;
     const fallbackColor = fallbackTileColor(`${titleText}|${event.date_start || ""}`);
     const fallbackPalette = buildEventTilePalette(fallbackColor);
-    [tile, button].forEach((element) => {
-      element.style.setProperty("--event-tile-bg", fallbackPalette.bg);
-      element.style.setProperty("--event-tile-ink", fallbackPalette.ink);
-      element.style.setProperty("--event-tile-muted", fallbackPalette.muted);
-      element.style.setProperty("--event-tile-badge-bg", fallbackPalette.badgeBg);
-      element.style.setProperty("--event-tile-badge-border", fallbackPalette.badgeBorder);
-      element.style.setProperty("--event-tile-badge-ink", fallbackPalette.badgeInk);
-    });
+    applyEventSurfacePalette([tile, button], fallbackPalette);
     button.appendChild(fallback);
   }
 
@@ -2434,17 +2431,19 @@ function buildDayPanelEventCard(event, meta) {
   const card = document.createElement("article");
   card.className = "calendar-day-event-card";
   card.dataset.eventId = String(event.id);
+  const titleText = pickText(event, "title") || "Untitled";
+  const eventImageUrl = getEventImages(event)[0] || "";
   if (event.is_system_holiday) {
     card.classList.add("calendar-day-event-card-holiday");
     applyHolidayPaletteStyles(card, event);
+  } else if (!eventImageUrl) {
+    const fallbackPalette = buildEventTilePalette(fallbackTileColor(`${titleText}|${event.date_start || ""}`));
+    applyEventSurfacePalette([card], fallbackPalette);
   }
 
   const summary = document.createElement("button");
   summary.type = "button";
   summary.className = "calendar-day-event-summary";
-
-  const titleText = pickText(event, "title") || "Untitled";
-  const eventImageUrl = getEventImages(event)[0] || "";
   const badges = getDayPanelBadges(event, meta);
 
   summary.innerHTML = `
@@ -2458,6 +2457,10 @@ function buildDayPanelEventCard(event, meta) {
       ${badges.length ? `<div class="calendar-day-event-badges">${badges.map((badge) => `<span class="calendar-day-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
     </div>
   `;
+  if (!event.is_system_holiday && eventImageUrl) {
+    const image = summary.querySelector(".calendar-day-event-thumb");
+    if (image) applyEventTileColor(summary, eventImageUrl, image, card);
+  }
   summary.addEventListener("click", (eventObject) => {
     eventObject.stopPropagation();
     openModal(eventDetailHtml(event), { anchorEl: summary });
