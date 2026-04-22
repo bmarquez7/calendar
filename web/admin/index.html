@@ -75,17 +75,7 @@
           <p class="small" id="queue-page-description">Recurring submissions are grouped together by default. Use <strong>Break apart</strong> on a series if you want to review or reject a single occurrence.</p>
           <div class="admin-bar admin-queue-toolbar admin-queue-summary-bar">
             <span class="badge" id="admin-count">0 events</span>
-            <input id="admin-search" type="search" placeholder="Search title, area, type, or location" />
             <button class="secondary" id="refresh">Refresh</button>
-            <select id="admin-sort-field" aria-label="Sort rows by">
-              <option value="status">Status</option>
-              <option value="date">Date</option>
-              <option value="title">Title</option>
-              <option value="highlighted">Highlighted</option>
-              <option value="area">Area</option>
-              <option value="type">Type</option>
-            </select>
-            <select id="admin-sort-direction" aria-label="Sort direction"></select>
             <details class="admin-filter-picker" id="admin-area-filter">
               <summary id="admin-area-filter-label">All areas</summary>
               <div class="admin-filter-picker-menu" id="admin-area-filter-menu"></div>
@@ -95,10 +85,13 @@
               <div class="admin-filter-picker-menu" id="admin-type-filter-menu"></div>
             </details>
           </div>
+          <div class="admin-bar admin-queue-search-row">
+            <input id="admin-search" type="search" placeholder="Search title, area, type, or location" />
+          </div>
           <div class="admin-bar admin-bulk-bar admin-queue-actions">
             <div class="admin-bulk-meta admin-queue-meta-cell">
               <label class="bulk-checkbox-label">
-                <input type="checkbox" id="admin-select-all" />
+                <input type="checkbox" id="admin-select-all" class="admin-select-checkbox" />
                 <span>Select all visible</span>
               </label>
             </div>
@@ -117,12 +110,48 @@
               <tr>
                 <th>Select</th>
                 <th>Poster</th>
-                <th class="admin-title-column">Title</th>
-                <th>Status</th>
-                <th>Highlighted</th>
-                <th>Date</th>
-                <th>Area</th>
-                <th>Type</th>
+                <th class="admin-title-column admin-sort-header">
+                  <span>Title</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="title" data-admin-sort-direction="asc" aria-label="Sort title A to Z">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="title" data-admin-sort-direction="desc" aria-label="Sort title Z to A">↓</button>
+                  </span>
+                </th>
+                <th class="admin-sort-header">
+                  <span>Status</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="status" data-admin-sort-direction="asc" aria-label="Sort status ascending">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="status" data-admin-sort-direction="desc" aria-label="Sort status descending">↓</button>
+                  </span>
+                </th>
+                <th class="admin-sort-header">
+                  <span>Highlighted</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="highlighted" data-admin-sort-direction="asc" aria-label="Sort highlighted off first">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="highlighted" data-admin-sort-direction="desc" aria-label="Sort highlighted first">↓</button>
+                  </span>
+                </th>
+                <th class="admin-sort-header">
+                  <span>Date</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="date" data-admin-sort-direction="asc" aria-label="Sort date soonest first">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="date" data-admin-sort-direction="desc" aria-label="Sort date furthest first">↓</button>
+                  </span>
+                </th>
+                <th class="admin-sort-header">
+                  <span>Area</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="area" data-admin-sort-direction="asc" aria-label="Sort area A to Z">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="area" data-admin-sort-direction="desc" aria-label="Sort area Z to A">↓</button>
+                  </span>
+                </th>
+                <th class="admin-sort-header">
+                  <span>Type</span>
+                  <span class="admin-sort-buttons">
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="type" data-admin-sort-direction="asc" aria-label="Sort type A to Z">↑</button>
+                    <button type="button" class="admin-sort-button" data-admin-sort-field="type" data-admin-sort-direction="desc" aria-label="Sort type Z to A">↓</button>
+                  </span>
+                </th>
                 <th class="admin-actions-column">Actions</th>
               </tr>
             </thead>

@@ -18,6 +18,7 @@ const adminCount = document.getElementById("admin-count");
 const adminSearchInput = document.getElementById("admin-search");
 const adminSortField = document.getElementById("admin-sort-field");
 const adminSortDirection = document.getElementById("admin-sort-direction");
+const adminSortButtons = Array.from(document.querySelectorAll("[data-admin-sort-field]"));
 const adminAreaFilter = document.getElementById("admin-area-filter");
 const adminAreaFilterLabel = document.getElementById("admin-area-filter-label");
 const adminAreaFilterMenu = document.getElementById("admin-area-filter-menu");
@@ -543,6 +544,21 @@ function syncBulkSelectionUi() {
   ].forEach((button) => {
     if (button) button.disabled = disabled;
   });
+
+  adminTableBody?.querySelectorAll("tr").forEach((row) => {
+    const rowIds = String(row.dataset.selectedIds || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!rowIds.length) return;
+    const rowSelectedCount = rowIds.filter((id) => selectedEventIds.has(id)).length;
+    const checkbox = row.querySelector(".admin-select-checkbox");
+    if (checkbox) {
+      checkbox.checked = rowSelectedCount === rowIds.length;
+      checkbox.indeterminate = rowSelectedCount > 0 && rowSelectedCount < rowIds.length;
+    }
+    row.classList.toggle("is-selected", rowSelectedCount > 0);
+  });
 }
 
 function toggleSelectedEventIds(ids, checked) {
@@ -695,6 +711,14 @@ function updateAdminSortDirectionOptions() {
     adminQueueSortDirection = options[0]?.value || "asc";
   }
   adminSortDirection.value = adminQueueSortDirection;
+}
+
+function syncAdminSortButtons() {
+  adminSortButtons.forEach((button) => {
+    const isActive = button.dataset.adminSortField === adminQueueSortField
+      && button.dataset.adminSortDirection === adminQueueSortDirection;
+    button.classList.toggle("is-active", isActive);
+  });
 }
 
 function summarizeFilterLabel(baseLabel, selectedValues) {
@@ -1048,6 +1072,7 @@ function setActiveQueueMode(mode) {
   }
   if (adminSortField) adminSortField.value = adminQueueSortField;
   updateAdminSortDirectionOptions();
+  syncAdminSortButtons();
 }
 
 function eventEndsAt(event) {
@@ -1774,6 +1799,7 @@ function renderTable() {
   adminTableBody.innerHTML = "";
   const sourceEvents = eventsForActiveQueue(currentEvents);
   updateAdminFilterMenus(sourceEvents);
+  syncAdminSortButtons();
   const filteredEvents = sourceEvents.filter((event) => matchesAdminQueueFilters(event));
   const entries = buildReviewEntries(filteredEvents);
   currentVisibleEventIds = [...new Set(filteredEvents.map((event) => String(event.id)).filter(Boolean))];
@@ -1916,21 +1942,24 @@ function renderTable() {
   }
 
   function renderEventRow(entry, { childLevel = 0, occurrenceIndex = 0, seriesLength = 0 } = {}) {
-    const row = document.createElement("tr");
-    if (childLevel > 0) {
+  const row = document.createElement("tr");
+  row.dataset.selectedIds = (entry.selectedIds || []).join(",");
+  if (childLevel > 0) {
       row.classList.add("admin-table-child");
       row.style.setProperty("--admin-indent-level", String(childLevel));
     }
 
-    const selectCell = document.createElement("td");
-    selectCell.className = "admin-table-select-cell";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    const selectedCount = (entry.selectedIds || []).filter((id) => selectedEventIds.has(String(id))).length;
-    checkbox.checked = entry.selectedIds.length > 0 && selectedCount === entry.selectedIds.length;
-    checkbox.indeterminate = selectedCount > 0 && selectedCount < entry.selectedIds.length;
-    checkbox.addEventListener("change", () => toggleSelectedEventIds(entry.selectedIds, checkbox.checked));
-    selectCell.appendChild(checkbox);
+  const selectCell = document.createElement("td");
+  selectCell.className = "admin-table-select-cell";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.className = "admin-select-checkbox";
+  const selectedCount = (entry.selectedIds || []).filter((id) => selectedEventIds.has(String(id))).length;
+  checkbox.checked = entry.selectedIds.length > 0 && selectedCount === entry.selectedIds.length;
+  checkbox.indeterminate = selectedCount > 0 && selectedCount < entry.selectedIds.length;
+  row.classList.toggle("is-selected", checkbox.checked || checkbox.indeterminate);
+  checkbox.addEventListener("change", () => toggleSelectedEventIds(entry.selectedIds, checkbox.checked));
+  selectCell.appendChild(checkbox);
 
     const posterCell = document.createElement("td");
     posterCell.className = "admin-poster-cell";
@@ -2491,6 +2520,16 @@ adminSortDirection?.addEventListener("change", (event) => {
   adminQueueSortDirection = event.target.value || "asc";
   renderTable();
 });
+adminSortButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    adminQueueSortField = button.dataset.adminSortField || "status";
+    adminQueueSortDirection = button.dataset.adminSortDirection || "asc";
+    if (adminSortField) adminSortField.value = adminQueueSortField;
+    updateAdminSortDirectionOptions();
+    syncAdminSortButtons();
+    renderTable();
+  });
+});
 adminSelectAll?.addEventListener("change", () => {
   toggleSelectedEventIds(visibleEventIds(), adminSelectAll.checked);
 });
@@ -2780,6 +2819,7 @@ if (batchRowsBody.querySelectorAll("tr").length === 0) {
 populateGroupedSelect(editForm.area, AREA_GROUPS, "Choose area");
 if (adminSortField) adminSortField.value = adminQueueSortField;
 updateAdminSortDirectionOptions();
+syncAdminSortButtons();
 updateAdminFilterMenus();
 editForm.area.addEventListener("change", syncEditHighlightAvailability);
 editForm.status.addEventListener("change", syncEditHighlightAvailability);

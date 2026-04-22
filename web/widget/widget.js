@@ -937,7 +937,71 @@ function fallbackAverageColor(data) {
   });
 }
 
-function extractProminentColor(img) {
+function hashString(value) {
+  return [...String(value || "")].reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 7);
+}
+
+function pickSampledColor(data, seedValue = "") {
+  const candidates = [];
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3] / 255;
+    if (alpha <= 0.1) continue;
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    if (saturation < 0.12) continue;
+    candidates.push({ r: red, g: green, b: blue, score: saturation + (alpha * 0.4) });
+  }
+  if (!candidates.length) return fallbackAverageColor(data);
+  const sorted = candidates.sort((a, b) => b.score - a.score);
+  const pool = sorted.slice(0, Math.min(12, sorted.length));
+  const seed = hashString(seedValue);
+  const chosen = pool[seed % pool.length];
+  return rgbString(chosen);
+}
+
+function hslToRgb(h, s, l) {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.max(0, Math.min(1, s));
+  const light = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs((2 * light) - 1)) * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = light - (c / 2);
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  if (hue < 60) [red, green, blue] = [c, x, 0];
+  else if (hue < 120) [red, green, blue] = [x, c, 0];
+  else if (hue < 180) [red, green, blue] = [0, c, x];
+  else if (hue < 240) [red, green, blue] = [0, x, c];
+  else if (hue < 300) [red, green, blue] = [x, 0, c];
+  else [red, green, blue] = [c, 0, x];
+  return {
+    r: (red + m) * 255,
+    g: (green + m) * 255,
+    b: (blue + m) * 255
+  };
+}
+
+function fallbackTileColor(seedValue = "") {
+  const seed = hashString(seedValue);
+  const hue = seed % 360;
+  return rgbString(hslToRgb(hue, 0.52, 0.68));
+}
+
+function personalizeTileColor(colorValue, seedValue = "") {
+  const base = parseRgbString(colorValue);
+  if (!base) return colorValue;
+  const accent = parseRgbString(fallbackTileColor(seedValue));
+  if (!accent) return colorValue;
+  return rgbString(mixRgb(base, accent, 0.16));
+}
+
+function extractProminentColor(img, options = {}) {
+  const { seed = "" } = options;
   const width = Math.max(12, Math.min(32, img.naturalWidth || 24));
   const height = Math.max(12, Math.min(32, img.naturalHeight || 24));
   const canvas = document.createElement("canvas");
@@ -975,9 +1039,18 @@ function extractProminentColor(img) {
     buckets.set(key, bucket);
   }
 
-  const winner = [...buckets.values()].sort((a, b) => b.score - a.score)[0];
+  const rankedBuckets = [...buckets.values()].sort((a, b) => b.score - a.score);
+  const winner = rankedBuckets[0];
   if (!winner || !winner.weight) {
-    return fallbackAverageColor(data);
+    return seed ? pickSampledColor(data, seed) : fallbackAverageColor(data);
+  }
+
+  const runnerUp = rankedBuckets[1];
+  const totalScore = rankedBuckets.reduce((sum, bucket) => sum + bucket.score, 0);
+  const hasClearMajority = !runnerUp
+    || (winner.score >= runnerUp.score * 1.22 && winner.score >= totalScore * 0.18);
+  if (!hasClearMajority && seed) {
+    return pickSampledColor(data, seed);
   }
 
   return rgbString({
@@ -996,7 +1069,7 @@ function applyFeaturedPosterColor(box, imageUrl, image) {
 
   const updateColor = () => {
     try {
-      const color = extractProminentColor(image);
+      const color = extractProminentColor(image, { seed: imageUrl });
       featuredColorCache.set(imageUrl, color);
       box.style.setProperty("--featured-poster-bg", color);
     } catch {
@@ -1017,7 +1090,7 @@ function applyFeaturedPosterColor(box, imageUrl, image) {
 
 function applyEventTileColor(button, imageUrl, image, host = null) {
   const applyPalette = (colorValue) => {
-    const palette = buildEventTilePalette(colorValue);
+    const palette = buildEventTilePalette(personalizeTileColor(colorValue, imageUrl));
     [button, host, button.closest(".event-tile")].filter(Boolean).forEach((element) => {
       element.style.setProperty("--event-tile-bg", palette.bg);
       element.style.setProperty("--event-tile-ink", palette.ink);
@@ -1036,7 +1109,7 @@ function applyEventTileColor(button, imageUrl, image, host = null) {
 
   const updateColor = () => {
     try {
-      const color = extractProminentColor(image);
+      const color = extractProminentColor(image, { seed: imageUrl });
       featuredColorCache.set(imageUrl, color);
       applyPalette(color);
     } catch {
@@ -2000,6 +2073,16 @@ function buildListTile(event) {
     const fallback = document.createElement("div");
     fallback.className = "event-tile-fallback";
     fallback.textContent = titleText;
+    const fallbackColor = fallbackTileColor(`${titleText}|${event.date_start || ""}`);
+    const fallbackPalette = buildEventTilePalette(fallbackColor);
+    [tile, button].forEach((element) => {
+      element.style.setProperty("--event-tile-bg", fallbackPalette.bg);
+      element.style.setProperty("--event-tile-ink", fallbackPalette.ink);
+      element.style.setProperty("--event-tile-muted", fallbackPalette.muted);
+      element.style.setProperty("--event-tile-badge-bg", fallbackPalette.badgeBg);
+      element.style.setProperty("--event-tile-badge-border", fallbackPalette.badgeBorder);
+      element.style.setProperty("--event-tile-badge-ink", fallbackPalette.badgeInk);
+    });
     button.appendChild(fallback);
   }
 
