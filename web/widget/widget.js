@@ -1451,6 +1451,10 @@ function dateKeyInTirana(value) {
   return `${year}-${month}-${day}`;
 }
 
+function todayDateKeyInTirana() {
+  return dateKeyInTirana(new Date());
+}
+
 function duplicateEventKey(event) {
   const dayKey = dateKeyInTirana(event.date_start);
   const titleKey = normalizeDuplicateValue(event.title_en || pickText(event, "title"));
@@ -2551,6 +2555,7 @@ function getMonthCalendarMetrics(days, grouped) {
 function renderCalendarMonth(events) {
   calendarView.innerHTML = "";
   const grouped = groupEventsByDate(events);
+  const todayKey = todayDateKeyInTirana();
   const monthStart = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
   const monthEnd = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0);
   const gridStart = startOfWeek(monthStart);
@@ -2607,6 +2612,7 @@ function renderCalendarMonth(events) {
       const cell = document.createElement("div");
       cell.className = "calendar-cell";
       cell.dataset.dateKey = key;
+      if (key === todayKey) cell.classList.add("is-today");
       const isSelectedDay = state.selectedCalendarDayKey === key;
       if (isSelectedDay) {
         cell.classList.add("is-active", "is-expanded");
@@ -2692,6 +2698,7 @@ function renderCalendarMonth(events) {
 function renderCalendarWeek(events) {
   calendarView.innerHTML = "";
   const grouped = groupEventsByDate(events);
+  const todayKey = todayDateKeyInTirana();
   const wrapper = document.createElement("div");
   wrapper.className = "calendar";
   const header = document.createElement("div");
@@ -2727,6 +2734,7 @@ function renderCalendarWeek(events) {
     const key = toDateKey(date);
     const day = document.createElement("div");
     day.className = "calendar-week-day";
+    if (key === todayKey) day.classList.add("is-today");
     const label = document.createElement("div");
     label.className = "calendar-date";
     label.textContent = date.toLocaleDateString(state.uiLang, { weekday: "short", day: "numeric" });
