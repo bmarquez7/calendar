@@ -632,6 +632,8 @@ section {
 .event-tile {
   min-width: 0;
   height: 100%;
+  border-radius: 16px;
+  background: var(--event-tile-bg, transparent);
 }
 
 .event-tile-button {
@@ -643,7 +645,7 @@ section {
   overflow: hidden;
   border: 1px solid var(--event-tile-badge-border, var(--border));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)),
     var(--event-tile-bg, var(--surface));
   color: var(--event-tile-ink, inherit);
   box-shadow: var(--shadow);
@@ -655,7 +657,7 @@ section {
 
 .event-tile-button:hover {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
     var(--event-tile-bg, var(--surface));
   color: var(--event-tile-ink, inherit);
   transform: translateY(-1px);
@@ -671,9 +673,9 @@ section {
 .event-tile-image {
   object-fit: contain;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
     var(--event-tile-bg, rgba(11, 18, 27, 0.08));
-  border-bottom: 1px solid rgba(224, 215, 198, 0.72);
+  border-bottom: 1px solid var(--event-tile-badge-border, rgba(224, 215, 198, 0.72));
 }
 
 .event-tile-fallback {
@@ -696,7 +698,7 @@ section {
   gap: 6px;
   align-content: start;
   grid-template-rows: auto auto auto 1fr;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
 }
 
 .event-tile-body h3 {
@@ -1389,8 +1391,9 @@ section {
   --event-modal-width: min(760px, calc(100vw - 32px));
   width: var(--event-modal-width);
   max-width: 760px;
-  max-height: none;
-  overflow: visible;
+  max-height: min(88vh, calc(100vh - 24px));
+  overflow: auto;
+  overscroll-behavior: contain;
   margin-top: var(--modal-anchor-top, 8vh);
   margin-bottom: 24px;
   margin-right: 0;
@@ -1619,29 +1622,51 @@ section {
 }
 
 .admin-queue-toolbar {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  width: 100%;
+  align-items: stretch;
+  gap: 8px;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
-.admin-queue-toolbar > * {
-  flex: 0 0 auto;
+.admin-queue-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.admin-queue-actions {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+}
+
+.admin-queue-summary-bar > *,
+.admin-queue-actions > * {
+  min-width: 0;
 }
 
 .bulk-checkbox-label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  font-size: 14px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
   color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .admin-bulk-meta {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 180px;
-  flex: 0 0 180px;
+  min-width: 0;
+}
+
+.admin-queue-meta-cell {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .admin-table-select-cell {
@@ -1684,12 +1709,15 @@ section {
 }
 
 .admin-actions button,
+.admin-queue-summary-bar select,
+.admin-queue-summary-bar input,
+.admin-filter-picker > summary,
 .admin-queue-toolbar button,
 .admin-queue-toolbar .button-link {
-  padding: 5px 8px;
+  padding: 5px 10px;
   font-size: 11px;
   line-height: 1.2;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .admin-actions button {
@@ -1702,27 +1730,20 @@ section {
   border-radius: 10px;
 }
 
-.admin-queue-toolbar .badge,
-.admin-queue-toolbar .bulk-checkbox-label {
+.admin-queue-summary-bar .badge,
+.admin-queue-actions .badge {
+  justify-content: center;
   white-space: nowrap;
 }
 
-.admin-bulk-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.admin-bulk-actions button {
-  width: 100%;
+.admin-queue-actions button {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   border-radius: 10px;
+  width: 100%;
 }
 
 .admin-table-child td {
@@ -1740,10 +1761,85 @@ section {
 }
 
 #admin-search {
-  min-width: 220px;
-  padding: 6px 8px;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 10px;
   font-size: 12px;
   line-height: 1.2;
+}
+
+.admin-queue-summary-bar select,
+.admin-queue-summary-bar input,
+.admin-queue-summary-bar button,
+.admin-filter-picker > summary,
+.admin-queue-summary-bar .badge {
+  width: 100%;
+  min-height: 36px;
+}
+
+.admin-filter-picker {
+  position: relative;
+}
+
+.admin-filter-picker > summary {
+  list-style: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.admin-filter-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-filter-picker[open] > summary {
+  border-color: rgba(200, 101, 42, 0.42);
+  box-shadow: 0 8px 22px rgba(31, 26, 20, 0.08);
+}
+
+.admin-filter-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 18px 36px rgba(31, 26, 20, 0.12);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.admin-filter-option:hover {
+  background: rgba(200, 101, 42, 0.08);
+}
+
+.admin-filter-option input {
+  margin: 0;
+}
+
+.admin-filter-empty {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .admin-poster-cell {
@@ -2567,18 +2663,9 @@ section {
     align-items: center;
   }
 
-  .admin-bulk-bar.admin-queue-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .admin-bulk-meta {
-    min-width: 0;
-    flex: 0 0 auto;
-  }
-
   .admin-actions,
-  .admin-bulk-actions {
+  .admin-queue-summary-bar,
+  .admin-queue-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2778,8 +2865,8 @@ section {
     max-width: none;
     border-radius: 18px;
     margin: var(--modal-anchor-top, 12px) auto 18px;
-    max-height: none;
-    overflow: visible;
+    max-height: calc(100vh - 16px);
+    overflow: auto;
     padding: 14px 14px 18px;
   }
 

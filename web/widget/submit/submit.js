@@ -899,8 +899,8 @@ function syncPriceState(card) {
   const isFree = priceType === "Free";
   minInput.disabled = isFree;
   maxInput.disabled = isFree;
-  minInput.required = !isFree;
-  maxInput.required = !isFree;
+  minInput.required = false;
+  maxInput.required = false;
   if (isFree) {
     minInput.value = "";
     maxInput.value = "";
@@ -1386,8 +1386,13 @@ async function submitRows() {
       return;
     }
 
-    if (priceType !== "Free" && (!priceMin || !priceMax)) {
-      setStatus(`${rowNo} needs min and max prices unless the event is Free.`, "error");
+    if (priceType !== "Free" && !priceMin && !priceMax) {
+      setStatus(`${rowNo} needs at least a min or max price unless the event is Free.`, "error");
+      return;
+    }
+
+    if (priceMin && priceMax && Number(priceMax) < Number(priceMin)) {
+      setStatus(`${rowNo} cannot have a max price lower than the min price.`, "error");
       return;
     }
 

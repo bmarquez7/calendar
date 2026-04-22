@@ -1015,15 +1015,17 @@ function applyFeaturedPosterColor(box, imageUrl, image) {
   }, { once: true });
 }
 
-function applyEventTileColor(button, imageUrl, image) {
+function applyEventTileColor(button, imageUrl, image, host = null) {
   const applyPalette = (colorValue) => {
     const palette = buildEventTilePalette(colorValue);
-    button.style.setProperty("--event-tile-bg", palette.bg);
-    button.style.setProperty("--event-tile-ink", palette.ink);
-    button.style.setProperty("--event-tile-muted", palette.muted);
-    button.style.setProperty("--event-tile-badge-bg", palette.badgeBg);
-    button.style.setProperty("--event-tile-badge-border", palette.badgeBorder);
-    button.style.setProperty("--event-tile-badge-ink", palette.badgeInk);
+    [button, host, button.closest(".event-tile")].filter(Boolean).forEach((element) => {
+      element.style.setProperty("--event-tile-bg", palette.bg);
+      element.style.setProperty("--event-tile-ink", palette.ink);
+      element.style.setProperty("--event-tile-muted", palette.muted);
+      element.style.setProperty("--event-tile-badge-bg", palette.badgeBg);
+      element.style.setProperty("--event-tile-badge-border", palette.badgeBorder);
+      element.style.setProperty("--event-tile-badge-ink", palette.badgeInk);
+    });
   };
 
   const cached = featuredColorCache.get(imageUrl);
@@ -1111,26 +1113,18 @@ function syncModalPlacement() {
   if (rect) {
     const modalHeight = Math.max(220, Math.min(modalContent?.offsetHeight || (mobileViewport ? 360 : 480), viewportHeight - topGap - bottomGap));
     const anchorCenter = rect.left + (rect.width / 2);
-    const roomBelow = viewportHeight - rect.bottom - bottomGap;
-    const roomAbove = rect.top - topGap;
-    const openBelow = roomBelow >= Math.min(modalHeight * 0.55, 260) || roomBelow >= roomAbove;
-    const preferredBelowTop = rect.bottom + (mobileViewport ? 6 : 10);
-    const preferredAboveTop = rect.top - modalHeight - (mobileViewport ? 6 : 10);
+    const anchorCenterY = rect.top + (rect.height / 2);
     const minTop = topGap;
     const maxTop = Math.max(minTop, viewportHeight - modalHeight - bottomGap);
-
-    nextTop = clamp(
-      Math.round(openBelow ? preferredBelowTop : preferredAboveTop),
-      minTop,
-      maxTop
-    );
+    nextTop = clamp(Math.round(anchorCenterY - (modalHeight / 2)), minTop, maxTop);
     nextLeft = Math.round(viewportWidth / 2);
 
     const modalWidth = Math.max(280, Math.min(modalContent?.offsetWidth || Math.min(760, viewportWidth - (sideGap * 2)), viewportWidth - (sideGap * 2)));
     const modalLeftEdge = nextLeft - (modalWidth / 2);
     const originXPx = clamp(anchorCenter - modalLeftEdge, 24, modalWidth - 24);
+    const originYPx = clamp(anchorCenterY - nextTop, 24, modalHeight - 24);
     originX = Math.round((originXPx / modalWidth) * 100);
-    originY = openBelow ? 0 : 100;
+    originY = Math.round((originYPx / modalHeight) * 100);
   }
 
   eventModal.style.setProperty("--modal-anchor-top", `${nextTop}px`);
@@ -1990,6 +1984,7 @@ function buildListTile(event) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "event-tile-button";
+  tile.appendChild(button);
 
   const titleText = pickText(event, "title") || "Untitled";
   const eventImageUrl = getEventImages(event)[0] || "";
@@ -1999,7 +1994,7 @@ function buildListTile(event) {
     image.src = eventImageUrl;
     image.alt = titleText;
     image.loading = "lazy";
-    applyEventTileColor(button, eventImageUrl, image);
+    applyEventTileColor(button, eventImageUrl, image, tile);
     button.appendChild(image);
   } else {
     const fallback = document.createElement("div");
@@ -2036,7 +2031,6 @@ function buildListTile(event) {
 
   button.appendChild(body);
   button.addEventListener("click", () => openModal(eventDetailHtml(event), { anchorEl: button }));
-  tile.appendChild(button);
   return tile;
 }
 

@@ -401,8 +401,8 @@ function validateSubmissionRow(row, index, sourceRow = {}) {
   if (new Date(row.date_end).getTime() < new Date(row.date_start).getTime()) {
     return `Event ${index + 1} must end after it starts.`;
   }
-  if (row.price_type !== "Free" && (row.price_min === null || row.price_min === "" || row.price_max === null || row.price_max === "")) {
-    return `Event ${index + 1} needs min and max prices unless it is Free.`;
+  if (row.price_type !== "Free" && (row.price_min === null || row.price_min === "") && (row.price_max === null || row.price_max === "")) {
+    return `Event ${index + 1} needs at least a minimum or maximum price unless it is Free.`;
   }
   if (row.price_min !== null && row.price_min < 0) {
     return `Event ${index + 1} cannot have a negative minimum price.`;

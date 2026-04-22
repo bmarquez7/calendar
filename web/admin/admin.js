@@ -1,6 +1,6 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../shared/config.js";
-import { AREA_GROUPS, formatAreaLabel, normalizeAreaValue, isFeaturedEligibleArea } from "../shared/constants.js";
+import { AREA_GROUPS, EVENT_TYPES, formatAreaLabel, normalizeAreaValue, isFeaturedEligibleArea } from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -16,6 +16,14 @@ const rolePill = document.getElementById("role-pill");
 const refreshButton = document.getElementById("refresh");
 const adminCount = document.getElementById("admin-count");
 const adminSearchInput = document.getElementById("admin-search");
+const adminSortField = document.getElementById("admin-sort-field");
+const adminSortDirection = document.getElementById("admin-sort-direction");
+const adminAreaFilter = document.getElementById("admin-area-filter");
+const adminAreaFilterLabel = document.getElementById("admin-area-filter-label");
+const adminAreaFilterMenu = document.getElementById("admin-area-filter-menu");
+const adminTypeFilter = document.getElementById("admin-type-filter");
+const adminTypeFilterLabel = document.getElementById("admin-type-filter-label");
+const adminTypeFilterMenu = document.getElementById("admin-type-filter-menu");
 const adminTableBody = document.querySelector("#admin-table tbody");
 const queuePageTitle = document.getElementById("queue-page-title");
 const queuePageDescription = document.getElementById("queue-page-description");
@@ -129,6 +137,42 @@ const expandedSeriesIds = new Set();
 const expandedTitleGroupIds = new Set();
 let adminSearchQuery = "";
 let currentVisibleEventIds = [];
+let adminQueueSortField = "status";
+let adminQueueSortDirection = "asc";
+let adminAreaFilters = [];
+let adminTypeFilters = [];
+
+if (activeQueueMode === "past") {
+  adminQueueSortField = "date";
+  adminQueueSortDirection = "desc";
+}
+
+const ADMIN_SORT_DIRECTION_OPTIONS = {
+  title: [
+    { value: "asc", label: "A-Z" },
+    { value: "desc", label: "Z-A" }
+  ],
+  status: [
+    { value: "asc", label: "Pending → Denied" },
+    { value: "desc", label: "Denied → Pending" }
+  ],
+  highlighted: [
+    { value: "desc", label: "Highlighted first" },
+    { value: "asc", label: "Not highlighted first" }
+  ],
+  date: [
+    { value: "asc", label: "Soonest → Furthest" },
+    { value: "desc", label: "Furthest → Soonest" }
+  ],
+  area: [
+    { value: "asc", label: "A-Z" },
+    { value: "desc", label: "Z-A" }
+  ],
+  type: [
+    { value: "asc", label: "A-Z" },
+    { value: "desc", label: "Z-A" }
+  ]
+};
 
 const ROLE_RANK = {
   moderator: 1,
@@ -621,6 +665,107 @@ function matchesAdminSearch(event, rawQuery) {
   return haystack.includes(query);
 }
 
+function uniqueSortedStrings(values) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+function queueAreaFilterOptions(events) {
+  return uniqueSortedStrings(events.map((event) => formatAreaLabel(event.area || "")));
+}
+
+function queueTypeFilterOptions(events) {
+  return uniqueSortedStrings([
+    ...EVENT_TYPES,
+    ...events.map((event) => String(event.event_type || "").trim())
+  ]);
+}
+
+function updateAdminSortDirectionOptions() {
+  if (!adminSortDirection) return;
+  const options = ADMIN_SORT_DIRECTION_OPTIONS[adminQueueSortField] || ADMIN_SORT_DIRECTION_OPTIONS.status;
+  adminSortDirection.innerHTML = "";
+  options.forEach((option) => {
+    const node = document.createElement("option");
+    node.value = option.value;
+    node.textContent = option.label;
+    adminSortDirection.appendChild(node);
+  });
+  if (!options.some((option) => option.value === adminQueueSortDirection)) {
+    adminQueueSortDirection = options[0]?.value || "asc";
+  }
+  adminSortDirection.value = adminQueueSortDirection;
+}
+
+function summarizeFilterLabel(baseLabel, selectedValues) {
+  if (!selectedValues.length) return `All ${baseLabel.toLowerCase()}`;
+  if (selectedValues.length === 1) return selectedValues[0];
+  return `${baseLabel} (${selectedValues.length})`;
+}
+
+function renderAdminCheckboxFilter(menu, values, selectedValues, onToggle) {
+  if (!menu) return;
+  menu.innerHTML = "";
+  if (!values.length) {
+    const empty = document.createElement("div");
+    empty.className = "admin-filter-empty";
+    empty.textContent = "No options";
+    menu.appendChild(empty);
+    return;
+  }
+
+  values.forEach((value) => {
+    const option = document.createElement("label");
+    option.className = "admin-filter-option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selectedValues.includes(value);
+    checkbox.addEventListener("change", () => onToggle(value, checkbox.checked));
+    const text = document.createElement("span");
+    text.textContent = value;
+    option.append(checkbox, text);
+    menu.appendChild(option);
+  });
+}
+
+function updateAdminFilterMenus(sourceEvents = eventsForActiveQueue(currentEvents)) {
+  const areaOptions = queueAreaFilterOptions(sourceEvents);
+  const typeOptions = queueTypeFilterOptions(sourceEvents);
+  adminAreaFilters = adminAreaFilters.filter((value) => areaOptions.includes(value));
+  adminTypeFilters = adminTypeFilters.filter((value) => typeOptions.includes(value));
+
+  renderAdminCheckboxFilter(adminAreaFilterMenu, areaOptions, adminAreaFilters, (value, checked) => {
+    adminAreaFilters = checked
+      ? [...new Set([...adminAreaFilters, value])]
+      : adminAreaFilters.filter((item) => item !== value);
+    updateAdminFilterMenus(sourceEvents);
+    renderTable();
+  });
+
+  renderAdminCheckboxFilter(adminTypeFilterMenu, typeOptions, adminTypeFilters, (value, checked) => {
+    adminTypeFilters = checked
+      ? [...new Set([...adminTypeFilters, value])]
+      : adminTypeFilters.filter((item) => item !== value);
+    updateAdminFilterMenus(sourceEvents);
+    renderTable();
+  });
+
+  if (adminAreaFilterLabel) adminAreaFilterLabel.textContent = summarizeFilterLabel("Areas", adminAreaFilters);
+  if (adminTypeFilterLabel) adminTypeFilterLabel.textContent = summarizeFilterLabel("Types", adminTypeFilters);
+}
+
+function closeAdminFilterPickers() {
+  adminAreaFilter?.removeAttribute("open");
+  adminTypeFilter?.removeAttribute("open");
+}
+
+function matchesAdminQueueFilters(event) {
+  if (!matchesAdminSearch(event, adminSearchQuery)) return false;
+  if (adminAreaFilters.length && !adminAreaFilters.includes(formatAreaLabel(event.area || ""))) return false;
+  if (adminTypeFilters.length && !adminTypeFilters.includes(String(event.event_type || "").trim())) return false;
+  return true;
+}
+
 function statusLabel(status, count = 0) {
   if (status === "mixed") return "mixed";
   if (!count || count === 1) return status;
@@ -710,18 +855,42 @@ function buildSingleEventEntry(event) {
 
 function sortReviewEntries(entries) {
   return entries.sort((a, b) => {
-    if (activeQueueMode === "past") {
-      const endDiff = queueEntryEndsAt(b) - queueEntryEndsAt(a);
-      if (endDiff !== 0) return endDiff;
-      const createdDiff = b.createdAt - a.createdAt;
-      if (createdDiff !== 0) return createdDiff;
-      return dateValue(b.events?.[0]?.date_start) - dateValue(a.events?.[0]?.date_start);
+    const direction = adminQueueSortDirection === "desc" ? -1 : 1;
+
+    const compareText = (left, right) => String(left || "").localeCompare(String(right || ""), undefined, { sensitivity: "base" });
+    const compareNumber = (left, right) => (Number(left) || 0) - (Number(right) || 0);
+
+    let primary = 0;
+    switch (adminQueueSortField) {
+      case "title":
+        primary = compareText(a.title, b.title);
+        break;
+      case "status":
+        primary = compareNumber(a.sortStatusRank, b.sortStatusRank);
+        break;
+      case "highlighted":
+        primary = compareNumber(Number(a.isHighlighted), Number(b.isHighlighted));
+        break;
+      case "area":
+        primary = compareText(a.areaLabel, b.areaLabel);
+        break;
+      case "type":
+        primary = compareText(a.typeLabel, b.typeLabel);
+        break;
+      case "date":
+      default:
+        primary = compareNumber(queueEntryStartsAt(a), queueEntryStartsAt(b));
+        break;
     }
-    const statusDiff = a.sortStatusRank - b.sortStatusRank;
-    if (statusDiff !== 0) return statusDiff;
-    const createdDiff = b.createdAt - a.createdAt;
-    if (createdDiff !== 0) return createdDiff;
-    return dateValue(a.events?.[0]?.date_start) - dateValue(b.events?.[0]?.date_start);
+    if (primary !== 0) return primary * direction;
+
+    const fallbackStatus = compareNumber(a.sortStatusRank, b.sortStatusRank);
+    if (fallbackStatus !== 0) return fallbackStatus;
+    const fallbackDate = compareNumber(queueEntryStartsAt(a), queueEntryStartsAt(b));
+    if (fallbackDate !== 0) return fallbackDate;
+    const fallbackCreated = compareNumber(b.createdAt, a.createdAt);
+    if (fallbackCreated !== 0) return fallbackCreated;
+    return compareText(a.title, b.title);
   });
 }
 
@@ -870,6 +1039,15 @@ function queueModeValue(value) {
 function setActiveQueueMode(mode) {
   activeQueueMode = queueModeValue(mode);
   writeStoredQueueMode(activeQueueMode);
+  if (activeQueueMode === "past") {
+    adminQueueSortField = "date";
+    adminQueueSortDirection = "desc";
+  } else {
+    adminQueueSortField = "status";
+    adminQueueSortDirection = "asc";
+  }
+  if (adminSortField) adminSortField.value = adminQueueSortField;
+  updateAdminSortDirectionOptions();
 }
 
 function eventEndsAt(event) {
@@ -893,6 +1071,13 @@ function queueEntryEndsAt(entry) {
     .map((event) => eventEndsAt(event)?.getTime() || 0)
     .filter(Boolean);
   return timestamps.length ? Math.max(...timestamps) : 0;
+}
+
+function queueEntryStartsAt(entry) {
+  const timestamps = (entry.events || [])
+    .map((event) => dateValue(event.date_start))
+    .filter(Boolean);
+  return timestamps.length ? Math.min(...timestamps) : 0;
 }
 
 async function uploadEventImage(file, folder) {
@@ -1159,6 +1344,7 @@ function toPayload(formData) {
   const featureBlocked = formData.get("feature_blocked") === "on";
   const repeatFrequency = formData.get("repeat_frequency") || "none";
   const area = formData.get("area") || "Skanderbeg Square";
+  const priceType = formData.get("price_type") || "Paid";
   const rawFeatureOverride = formData.get("feature_override") === "true";
   const featureOverride = rawFeatureOverride && !isFeaturedEligibleArea(area) && repeatFrequency === "none" && !featureBlocked;
   const canHighlight = canFeatureEventArea(area, status, featureBlocked, featureOverride, repeatFrequency === "none" ? selectedEventRecurrenceGroupId : "recurring");
@@ -1186,14 +1372,28 @@ function toPayload(formData) {
     feature_override: featureOverride,
     feature_blocked: featureBlocked,
     is_highlighted: !featureBlocked && canHighlight && formData.get("is_highlighted") === "on",
-    price_type: formData.get("price_type") || "Paid",
-    price_min: formData.get("price_min") || null,
-    price_max: formData.get("price_max") || null,
+    price_type: priceType,
+    price_min: priceType === "Free" ? null : (formData.get("price_min") || null),
+    price_max: priceType === "Free" ? null : (formData.get("price_max") || null),
     currency: formData.get("currency") || "ALL",
     ticket_url: formData.get("ticket_url") || null,
     event_image_url: formData.get("event_image_url") || null,
     admin_response_note: formData.get("admin_response_note") || null
   };
+}
+
+function validatePriceRequirement(payload) {
+  const priceType = String(payload.price_type || "").trim();
+  const priceMin = payload.price_min;
+  const priceMax = payload.price_max;
+  if (priceType === "Free") return "";
+  if (priceMin && Number(priceMin) < 0) return "Minimum price cannot be negative.";
+  if (priceMax && Number(priceMax) < 0) return "Maximum price cannot be negative.";
+  if (!priceMin && !priceMax) return "Add at least a minimum or maximum price unless the event is marked Free.";
+  if (priceMin && priceMax && Number(priceMax) < Number(priceMin)) {
+    return "Maximum price cannot be lower than minimum price.";
+  }
+  return "";
 }
 
 function addByFrequency(date, frequency) {
@@ -1248,6 +1448,11 @@ async function saveEvent(payload) {
   }
   if (!payload.title_en || !payload.description_en || !payload.date_start) {
     setStatus(editStatus, "Title, description, and date_start are required.");
+    return;
+  }
+  const priceError = validatePriceRequirement(payload);
+  if (priceError) {
+    setStatus(editStatus, priceError, "error");
     return;
   }
 
@@ -1568,10 +1773,12 @@ function renderTable() {
   if (queuePageDescription) queuePageDescription.textContent = queueMeta.description;
   adminTableBody.innerHTML = "";
   const sourceEvents = eventsForActiveQueue(currentEvents);
-  const filteredEvents = sourceEvents.filter((event) => matchesAdminSearch(event, adminSearchQuery));
+  updateAdminFilterMenus(sourceEvents);
+  const filteredEvents = sourceEvents.filter((event) => matchesAdminQueueFilters(event));
   const entries = buildReviewEntries(filteredEvents);
   currentVisibleEventIds = [...new Set(filteredEvents.map((event) => String(event.id)).filter(Boolean))];
-  adminCount.textContent = adminSearchQuery
+  const hasActiveQueueFilters = Boolean(adminSearchQuery || adminAreaFilters.length || adminTypeFilters.length);
+  adminCount.textContent = hasActiveQueueFilters
     ? `${filteredEvents.length} of ${sourceEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`
     : `${sourceEvents.length} events • ${entries.length} review row${entries.length === 1 ? "" : "s"}`;
 
@@ -2077,8 +2284,8 @@ function addBatchRow(prefill = {}) {
   row.appendChild(createBatchCell("datetime-local", "batch-date-end", "", true));
   row.appendChild(createBatchCell("text", "batch-languages", "en,sq", true));
   row.appendChild(createBatchCell("text", "batch-price-type", "Paid", true));
-  row.appendChild(createBatchCell("number", "batch-price-min", "0", true));
-  row.appendChild(createBatchCell("number", "batch-price-max", "0", true));
+  row.appendChild(createBatchCell("number", "batch-price-min", "Minimum"));
+  row.appendChild(createBatchCell("number", "batch-price-max", "Maximum"));
   row.appendChild(createBatchCell("text", "batch-currency", "ALL", true));
   row.appendChild(createBatchCell("text", "batch-status", "approved", true));
   row.appendChild(createBatchCheckboxCell("batch-highlighted"));
@@ -2116,8 +2323,8 @@ function addBatchRow(prefill = {}) {
   row.querySelector(".batch-date-end").value = toLocalInputValue(prefill.date_end);
   row.querySelector(".batch-languages").value = prefill.event_language || "en";
   row.querySelector(".batch-price-type").value = prefill.price_type || "Paid";
-  row.querySelector(".batch-price-min").value = prefill.price_min || "0";
-  row.querySelector(".batch-price-max").value = prefill.price_max || "0";
+  row.querySelector(".batch-price-min").value = prefill.price_min || "";
+  row.querySelector(".batch-price-max").value = prefill.price_max || "";
   row.querySelector(".batch-currency").value = prefill.currency || "ALL";
   row.querySelector(".batch-status").value = prefill.status || "approved";
   row.querySelector(".batch-highlighted").checked = Boolean(prefill.is_highlighted);
@@ -2176,7 +2383,7 @@ function collectBatchRowPayload(row) {
   const event_image_url = (row.querySelector(".batch-image-url")?.value || "").trim();
   const event_image_file = row.querySelector(".batch-image-file")?.files?.[0] || null;
 
-  const requiredValues = [title_en, description_en, location_en, event_type, area, date_start, date_end, languages, price_type, price_min, price_max, currency, status, ticket_url];
+  const requiredValues = [title_en, description_en, location_en, event_type, area, date_start, date_end, languages, price_type, currency, status, ticket_url];
   const missingRequired = requiredValues.some((value) => !value);
 
   return {
@@ -2192,8 +2399,8 @@ function collectBatchRowPayload(row) {
       date_end,
       event_language: languages.split(",").map((v) => v.trim()).filter(Boolean),
       price_type,
-      price_min: price_min || null,
-      price_max: price_max || null,
+      price_min: price_type === "Free" ? null : (price_min || null),
+      price_max: price_type === "Free" ? null : (price_max || null),
       currency,
       status,
       is_highlighted: canFeatureEventArea(area, status) ? is_highlighted : false,
@@ -2225,6 +2432,11 @@ async function batchInsertRows() {
     if (missingRequired) {
       invalidIndexes.push(rowNumber);
       continue;
+    }
+    const priceError = validatePriceRequirement(payload);
+    if (priceError) {
+      setStatus(batchStatus, `Row ${rowNumber}: ${priceError}`, "error");
+      return;
     }
     if (event_image_file) {
       try {
@@ -2270,6 +2482,15 @@ adminSearchInput?.addEventListener("input", (event) => {
   adminSearchQuery = event.target.value || "";
   renderTable();
 });
+adminSortField?.addEventListener("change", (event) => {
+  adminQueueSortField = event.target.value || "status";
+  updateAdminSortDirectionOptions();
+  renderTable();
+});
+adminSortDirection?.addEventListener("change", (event) => {
+  adminQueueSortDirection = event.target.value || "asc";
+  renderTable();
+});
 adminSelectAll?.addEventListener("change", () => {
   toggleSelectedEventIds(visibleEventIds(), adminSelectAll.checked);
 });
@@ -2291,6 +2512,10 @@ taskButtons.forEach((button) => {
     if (pageId === "users-page") await loadUsers();
     if (pageId === "settings-page") await loadSettings();
   });
+});
+document.addEventListener("click", (event) => {
+  if (adminAreaFilter && !adminAreaFilter.contains(event.target)) adminAreaFilter.removeAttribute("open");
+  if (adminTypeFilter && !adminTypeFilter.contains(event.target)) adminTypeFilter.removeAttribute("open");
 });
 hubBackButtons.forEach((button) => {
   button.addEventListener("click", () => showTaskHub());
@@ -2315,6 +2540,9 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && featureOverrideModal && !featureOverrideModal.classList.contains("hidden")) {
     closeFeatureOverrideModal(false);
+  }
+  if (event.key === "Escape") {
+    closeAdminFilterPickers();
   }
 });
 
@@ -2550,6 +2778,9 @@ if (batchRowsBody.querySelectorAll("tr").length === 0) {
 }
 
 populateGroupedSelect(editForm.area, AREA_GROUPS, "Choose area");
+if (adminSortField) adminSortField.value = adminQueueSortField;
+updateAdminSortDirectionOptions();
+updateAdminFilterMenus();
 editForm.area.addEventListener("change", syncEditHighlightAvailability);
 editForm.status.addEventListener("change", syncEditHighlightAvailability);
 editForm.feature_blocked?.addEventListener("change", syncEditHighlightAvailability);
