@@ -830,6 +830,7 @@ function summarizeSeries(events) {
     canHighlight: sorted.some((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     canOverrideHighlight: sorted.some((event) => canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     createdAt: Math.max(...sorted.map((event) => dateValue(event.created_at))),
+    sortStartAt: dateValue(first?.date_start),
     sortStatusRank: Math.min(...sorted.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
     expanded: expandedSeriesIds.has(String(first.recurrence_group_id)),
     titleGroupKey: normalizeTitleGroupKey(distinctTitles[0] || "")
@@ -860,6 +861,7 @@ function buildSingleEventEntry(event) {
     canHighlight: canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id),
     canOverrideHighlight: canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id),
     createdAt: dateValue(event.created_at),
+    sortStartAt: dateValue(event.date_start),
     sortStatusRank: EVENT_STATUS_RANK[event.status] ?? 99,
     titleGroupKey: normalizeTitleGroupKey(event.title_en || "")
   };
@@ -941,6 +943,7 @@ function summarizeTitleGroup(entries) {
     canHighlight: allEvents.some((event) => canFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     canOverrideHighlight: allEvents.some((event) => canOverrideFeatureEventArea(event.area, event.status, event.feature_blocked, event.feature_override, event.recurrence_group_id)),
     createdAt: Math.max(...allEvents.map((event) => dateValue(event.created_at))),
+    sortStartAt: dateValue(first?.date_start),
     sortStatusRank: Math.min(...allEvents.map((event) => EVENT_STATUS_RANK[event.status] ?? 99)),
     expanded: expandedTitleGroupIds.has(titleKey),
     titleGroupKey: titleKey,
@@ -1092,6 +1095,7 @@ function queueEntryEndsAt(entry) {
 }
 
 function queueEntryStartsAt(entry) {
+  if (entry?.sortStartAt) return Number(entry.sortStartAt) || 0;
   const timestamps = (entry.events || [])
     .map((event) => dateValue(event.date_start))
     .filter(Boolean);
@@ -1123,36 +1127,74 @@ async function uploadEventImage(file, folder) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${ADMIN_API_URL}${path}`, {
-    ...options,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      ...(options.headers || {})
-    }
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error || `HTTP ${response.status}`);
+  const session = await ensureSession();
+  if (session?.access_token) {
+    accessToken = session.access_token;
   }
-  return payload;
+  const targets = [...new Set([`${ADMIN_API_URL}${path}`, path])];
+  let lastError = null;
+
+  for (const target of targets) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch(target, {
+          ...options,
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken || ""}`,
+            ...(options.headers || {})
+          }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || `HTTP ${response.status}`);
+        }
+        return payload;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 650));
+          continue;
+        }
+      }
+    }
+  }
+
+  throw new Error(lastError?.message || "Request failed");
 }
 
 async function publicApi(path, options = {}) {
-  const response = await fetch(`${ADMIN_API_URL}${path}`, {
-    ...options,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
+  const targets = [...new Set([`${ADMIN_API_URL}${path}`, path])];
+  let lastError = null;
+
+  for (const target of targets) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch(target, {
+          ...options,
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+          }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || `HTTP ${response.status}`);
+        }
+        return payload;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 650));
+          continue;
+        }
+      }
     }
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error || `HTTP ${response.status}`);
   }
-  return payload;
+
+  throw new Error(lastError?.message || "Request failed");
 }
 
 function inviteResultMessage(result) {
@@ -1860,6 +1902,7 @@ function renderTable() {
 
   function createActionButton(label, onClick, secondary = false) {
     const button = document.createElement("button");
+    button.type = "button";
     button.textContent = label;
     if (secondary) button.className = "secondary";
     button.addEventListener("click", onClick);
