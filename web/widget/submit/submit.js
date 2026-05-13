@@ -3,6 +3,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } fr
 import {
   EVENT_TYPES,
   AREA_GROUPS,
+  DEFAULT_EVENT_IMAGE_OPTIONS,
   DEFAULT_EVENT_LANGUAGE_OPTIONS,
   sortEventLanguageOptions,
   formatEventLanguageValue,
@@ -59,6 +60,11 @@ const submitterNote = document.getElementById("submitter-note");
 let activeDescriptionInput = null;
 let activePickerState = null;
 let eventLanguageOptions = [...DEFAULT_EVENT_LANGUAGE_OPTIONS];
+const defaultEventImageOptions = DEFAULT_EVENT_IMAGE_OPTIONS.map((option) => ({
+  ...option,
+  absoluteUrl: new URL(option.path, window.location.origin).toString()
+}));
+const defaultEventImageOptionMap = new Map(defaultEventImageOptions.map((option) => [option.value, option]));
 
 function setStatus(message, kind = "info") {
   statusBox.style.display = "block";
@@ -327,9 +333,18 @@ function formatCompactPrice(priceType, min, max, currency) {
 function mediaSummary(card) {
   const fileCount = Array.from(card.querySelector(".image-files")?.files || []).length;
   const imageUrl = String(card.querySelector(".image-url")?.value || "").trim();
+  const defaultPoster = selectedDefaultEventImage(card);
   if (fileCount) return `${fileCount} photo${fileCount === 1 ? "" : "s"} selected`;
   if (imageUrl) return "External image added";
+  if (defaultPoster) return `${defaultPoster.label} default selected`;
   return "No images added";
+}
+
+function selectedDefaultEventImage(scope) {
+  const source = resolveEditorScope(scope, "default-image-editor-panel");
+  const checked = source.querySelector(".default-event-image-input:checked");
+  if (!checked) return null;
+  return defaultEventImageOptionMap.get(checked.value) || null;
 }
 
 function createAccordionSection(card, key, titleText, summaryFn, children, options = {}) {
@@ -570,6 +585,95 @@ function createEventTypeField() {
     syncEventTypeLaunch(wrap);
   });
   syncEventTypeLaunch(wrap);
+  return wrap;
+}
+
+function defaultEventImageSummary(scope) {
+  return selectedDefaultEventImage(scope)?.label || "No default poster";
+}
+
+function syncDefaultEventImageLaunch(scope) {
+  const button = scope.querySelector(".default-event-image-launch");
+  if (!button) return;
+  const summary = defaultEventImageSummary(scope);
+  button.textContent = summary;
+  button.classList.toggle("is-filled", summary !== "No default poster");
+  refreshAccordionSummaries(scope.closest(".public-submit-card"));
+}
+
+function createDefaultEventImageField(rowId) {
+  const wrap = document.createElement("div");
+  wrap.className = "public-submit-field public-submit-default-image-field";
+
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Default poster";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "public-submit-launch default-event-image-launch";
+  button.textContent = "No default poster";
+
+  const editor = document.createElement("div");
+  editor.className = "picker-editor-panel default-image-editor-panel";
+  editor.hidden = true;
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.className = "secondary default-image-clear";
+  clearButton.textContent = "No default poster";
+
+  const grid = document.createElement("div");
+  grid.className = "default-event-image-grid";
+
+  defaultEventImageOptions.forEach((option) => {
+    const choice = document.createElement("label");
+    choice.className = "default-event-image-option";
+
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = `default-image-${rowId}`;
+    input.className = "default-event-image-input";
+    input.value = option.value;
+
+    const tile = document.createElement("span");
+    tile.className = "default-event-image-tile";
+    tile.title = `${option.label} default poster`;
+
+    const image = document.createElement("img");
+    image.className = "default-event-image-preview";
+    image.src = option.path;
+    image.alt = `${option.label} default poster`;
+    image.loading = "lazy";
+
+    const caption = document.createElement("span");
+    caption.className = "default-event-image-caption";
+    caption.textContent = option.label;
+
+    tile.append(image, caption);
+    choice.append(input, tile);
+    grid.append(choice);
+
+    input.addEventListener("change", () => syncDefaultEventImageLaunch(wrap));
+  });
+
+  const help = createHelpText("Pick a built-in poster if you do not want to upload one. Any poster can be used for any event. Uploaded photos or an external image URL will override this default.");
+
+  clearButton.addEventListener("click", () => {
+    editor.querySelectorAll(".default-event-image-input").forEach((input) => {
+      input.checked = false;
+    });
+    syncDefaultEventImageLaunch(wrap);
+  });
+
+  editor.append(clearButton, grid, help);
+  wrap.append(label, button, editor);
+
+  button.addEventListener("click", () => {
+    openPickerModal("Default poster", wrap, editor, () => syncDefaultEventImageLaunch(wrap));
+  });
+
+  syncDefaultEventImageLaunch(wrap);
   return wrap;
 }
 
@@ -1270,6 +1374,7 @@ function addRow() {
   const currencySelect = createSelect("currency", CURRENCY_OPTIONS, true);
   const ticketUrlInput = createInput("url", "ticket-url", "Ticket / RSVP URL");
   const imageFields = createImageFields();
+  const defaultEventImageField = createDefaultEventImageField(card.dataset.rowId);
 
   const descriptionField = createDescriptionField();
   const titleField = createField("Title *", titleInput);
@@ -1342,7 +1447,7 @@ function addRow() {
       "media",
       "Media",
       () => mediaSummary(card),
-      [imageFields.imageUrlField, imageFields.imageFilesField, imageFields.featuredField],
+      [imageFields.imageUrlField, imageFields.imageFilesField, defaultEventImageField, imageFields.featuredField],
       { fullWidth: true }
     )
   ];
@@ -1359,6 +1464,10 @@ function addRow() {
     refreshAccordionSummaries(card);
   });
   card.querySelector(".image-url")?.addEventListener("input", () => refreshAccordionSummaries(card));
+  defaultEventImageField.querySelectorAll(".default-event-image-input").forEach((input) => {
+    input.addEventListener("change", () => refreshAccordionSummaries(card));
+  });
+  defaultEventImageField.querySelector(".default-image-clear")?.addEventListener("click", () => refreshAccordionSummaries(card));
   startInput.addEventListener("change", () => {
     syncRecurringState(card);
     refreshAccordionSummaries(card);
@@ -1377,6 +1486,7 @@ function addRow() {
   syncLanguageState(card);
   syncRecurringState(card);
   syncEventTypeLaunch(card);
+  syncDefaultEventImageLaunch(card);
   syncLanguageLaunch(card);
   resetRecurringSummary(card);
   syncAccordionCard(card);
@@ -1397,8 +1507,9 @@ function rowEmpty(card) {
   ];
   const hasValue = fields.some((selector) => String(card.querySelector(selector)?.value || "").trim());
   const hasCategories = collectEventTypes(card).length > 0;
+  const hasDefaultImage = Boolean(selectedDefaultEventImage(card));
   const hasFile = card.querySelector(".image-files")?.files?.[0];
-  return !hasValue && !hasCategories && !hasFile;
+  return !hasValue && !hasCategories && !hasDefaultImage && !hasFile;
 }
 
 function validateSubmitterInfo() {
@@ -1439,6 +1550,7 @@ async function submitRows() {
     const ticketUrl = card.querySelector(".ticket-url").value.trim();
     const imageUrlInput = card.querySelector(".image-url").value.trim();
     const imageFiles = Array.from(card.querySelector(".image-files")?.files || []);
+    const defaultPoster = selectedDefaultEventImage(card);
 
     const required = [title, description, address, area, dateStart, dateEnd, priceType, currency];
     if (required.some((value) => !value)) {
@@ -1487,6 +1599,9 @@ async function submitRows() {
         setStatus(`Image upload failed on ${rowNo}: ${error.message}`, "error");
         return;
       }
+    } else if (!featuredImageUrl && defaultPoster?.absoluteUrl) {
+      featuredImageUrl = defaultPoster.absoluteUrl;
+      eventImageUrls = [defaultPoster.absoluteUrl];
     }
 
     const basePayload = {

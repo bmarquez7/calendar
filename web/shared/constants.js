@@ -12,6 +12,26 @@ export const EVENT_TYPES = [
   "Health & Wellness"
 ];
 
+const EVENT_TYPE_DEFAULT_IMAGE_SLUGS = {
+  Music: "music",
+  Art: "art",
+  Tech: "tech",
+  Business: "business",
+  Family: "family",
+  Sports: "sports",
+  Nightlife: "nightlife",
+  Community: "community",
+  "Food & Drink": "food-and-drink",
+  Education: "education",
+  "Health & Wellness": "health-and-wellness"
+};
+
+export const DEFAULT_EVENT_IMAGE_OPTIONS = EVENT_TYPES.map((label) => ({
+  value: label,
+  label,
+  path: `/shared/default-event-images/${EVENT_TYPE_DEFAULT_IMAGE_SLUGS[label]}.png`
+}));
+
 const EVENT_TYPE_ALIASES = new Map([
   ["wellness", "Health & Wellness"],
   ["health wellness", "Health & Wellness"],
