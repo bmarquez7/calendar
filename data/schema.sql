@@ -15,6 +15,7 @@ create table if not exists public.events (
   location_es text,
   location_sq text,
   event_type text not null,
+  event_types text[] not null default '{}'::text[],
   area text not null,
   event_language text[] not null,
   date_start timestamptz not null,

@@ -5,7 +5,8 @@ import {
   AREA_GROUPS,
   DEFAULT_EVENT_LANGUAGE_OPTIONS,
   sortEventLanguageOptions,
-  formatEventLanguageValue
+  formatEventLanguageValue,
+  formatEventTypes
 } from "../../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -508,6 +509,68 @@ function languageSummary(scope) {
   if (!values.length) return "Select languages";
   if (values.length <= 2) return values.join(", ");
   return `${values.slice(0, 2).join(", ")} +${values.length - 2}`;
+}
+
+function collectEventTypes(scope) {
+  const source = resolveEditorScope(scope, "event-type-editor-panel");
+  const select = source.querySelector(".event-type-select");
+  return Array.from(select?.selectedOptions || [])
+    .map((option) => option.value.trim())
+    .filter(Boolean);
+}
+
+function eventTypeSummary(scope) {
+  const values = collectEventTypes(scope);
+  if (!values.length) return "Select categories";
+  const label = formatEventTypes(values);
+  if (values.length <= 2) return label;
+  return `${values.slice(0, 2).join(", ")} +${values.length - 2}`;
+}
+
+function syncEventTypeLaunch(scope) {
+  const button = scope.querySelector(".event-type-launch");
+  if (!button) return;
+  const summary = eventTypeSummary(scope);
+  button.textContent = summary;
+  button.classList.toggle("is-filled", summary !== "Select categories");
+  refreshAccordionSummaries(scope.closest(".public-submit-card"));
+}
+
+function createEventTypeField() {
+  const wrap = document.createElement("div");
+  wrap.className = "public-submit-field public-submit-event-type-field";
+
+  const label = document.createElement("span");
+  label.className = "public-submit-label";
+  label.textContent = "Categories *";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "public-submit-launch event-type-launch";
+  button.textContent = "Select categories";
+
+  const editor = document.createElement("div");
+  editor.className = "picker-editor-panel event-type-editor-panel";
+  editor.hidden = true;
+
+  const select = document.createElement("select");
+  select.className = "event-type-select";
+  select.multiple = true;
+  select.size = 6;
+  createOptionElements(select, EVENT_TYPES);
+  const help = createHelpText("Choose one or more categories for this event.");
+
+  editor.append(select, help);
+  wrap.append(label, button, editor);
+
+  button.addEventListener("click", () => {
+    openPickerModal("Categories", wrap, editor, () => syncEventTypeLaunch(wrap));
+  });
+  select.addEventListener("change", () => {
+    syncEventTypeLaunch(wrap);
+  });
+  syncEventTypeLaunch(wrap);
+  return wrap;
 }
 
 function createLanguageField() {
@@ -1193,7 +1256,7 @@ function addRow() {
 
   const titleInput = createInput("text", "title", "Event title", true);
   const addressInput = createInput("text", "address", "Street address", true);
-  const eventTypeSelect = createSelect("event-type", EVENT_TYPES, true);
+  const eventTypeField = createEventTypeField();
   const areaSelect = createSelect("area", AREA_GROUPS, true);
   const startInput = createInput("datetime-local", "date-start", "", true);
   const endInput = createInput("datetime-local", "date-end", "", true);
@@ -1210,7 +1273,6 @@ function addRow() {
 
   const descriptionField = createDescriptionField();
   const titleField = createField("Title *", titleInput);
-  const typeField = createField("Type *", eventTypeSelect);
   const addressField = createField("Address *", addressInput);
   const areaField = createField("Area *", areaSelect);
   const startField = createField("Start *", startInput);
@@ -1228,12 +1290,13 @@ function addRow() {
       "Essentials",
       () => {
         const titleValue = titleInput.value.trim();
-        const typeValue = eventTypeSelect.value.trim();
-        if (!titleValue && !typeValue) return "Add title, description, and type";
-        if (!typeValue) return titleValue || "Add title";
+        const selectedTypes = collectEventTypes(eventTypeField);
+        const typeValue = eventTypeSummary(eventTypeField);
+        if (!titleValue && !selectedTypes.length) return "Add title, description, and categories";
+        if (!selectedTypes.length) return titleValue || "Add title";
         return titleValue ? `${titleValue} · ${typeValue}` : typeValue;
       },
-      [titleField, descriptionField, typeField],
+      [titleField, descriptionField, eventTypeField],
       { defaultOpen: true }
     ),
     createAccordionSection(
@@ -1302,7 +1365,6 @@ function addRow() {
   });
   endInput.addEventListener("change", () => refreshAccordionSummaries(card));
   titleInput.addEventListener("input", () => refreshAccordionSummaries(card));
-  eventTypeSelect.addEventListener("change", () => refreshAccordionSummaries(card));
   addressInput.addEventListener("input", () => refreshAccordionSummaries(card));
   areaSelect.addEventListener("change", () => refreshAccordionSummaries(card));
   priceTypeSelect.addEventListener("change", () => refreshAccordionSummaries(card));
@@ -1314,6 +1376,7 @@ function addRow() {
   syncImageState(card);
   syncLanguageState(card);
   syncRecurringState(card);
+  syncEventTypeLaunch(card);
   syncLanguageLaunch(card);
   resetRecurringSummary(card);
   syncAccordionCard(card);
@@ -1325,6 +1388,7 @@ function rowEmpty(card) {
     ".title",
     ".description",
     ".address",
+    ".area",
     ".date-start",
     ".date-end",
     ".language-other-input",
@@ -1332,8 +1396,9 @@ function rowEmpty(card) {
     ".image-url"
   ];
   const hasValue = fields.some((selector) => String(card.querySelector(selector)?.value || "").trim());
+  const hasCategories = collectEventTypes(card).length > 0;
   const hasFile = card.querySelector(".image-files")?.files?.[0];
-  return !hasValue && !hasFile;
+  return !hasValue && !hasCategories && !hasFile;
 }
 
 function validateSubmitterInfo() {
@@ -1362,7 +1427,7 @@ async function submitRows() {
     const title = card.querySelector(".title").value.trim();
     const description = card.querySelector(".description").value.trim();
     const address = card.querySelector(".address").value.trim();
-    const eventType = card.querySelector(".event-type").value.trim();
+    const eventTypes = collectEventTypes(card);
     const area = card.querySelector(".area").value.trim();
     const dateStart = toIsoOrNull(card.querySelector(".date-start").value.trim());
     const dateEnd = toIsoOrNull(card.querySelector(".date-end").value.trim());
@@ -1375,9 +1440,14 @@ async function submitRows() {
     const imageUrlInput = card.querySelector(".image-url").value.trim();
     const imageFiles = Array.from(card.querySelector(".image-files")?.files || []);
 
-    const required = [title, description, address, eventType, area, dateStart, dateEnd, priceType, currency];
+    const required = [title, description, address, area, dateStart, dateEnd, priceType, currency];
     if (required.some((value) => !value)) {
       setStatus(`${rowNo} is missing required fields.`, "error");
+      return;
+    }
+
+    if (!eventTypes.length) {
+      setStatus(`${rowNo} needs at least one category selected.`, "error");
       return;
     }
 
@@ -1424,7 +1494,8 @@ async function submitRows() {
       title_en: title,
       description_en: description,
       location_en: address,
-      event_type: eventType,
+      event_type: eventTypes[0] || "",
+      event_types: eventTypes,
       area,
       event_language: languages,
       date_start: dateStart,

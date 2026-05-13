@@ -7,8 +7,10 @@ import {
   DEFAULT_EVENT_LANGUAGE_OPTIONS,
   sortEventLanguageOptions,
   formatEventLanguageValue,
+  formatEventTypes,
   formatAreaLabel,
   normalizeAreaValue,
+  resolveEventTypes,
   isFeaturedEligibleArea
 } from "../shared/constants.js";
 
@@ -270,7 +272,7 @@ const uiStrings = {
     submitSubtitle: "Submissions are reviewed before going live.",
     filters: {
       search: "Search",
-      eventType: "Event type",
+      eventType: "Categories",
       area: "Area",
       eventLanguage: "Event language",
       dateFrom: "From",
@@ -283,6 +285,8 @@ const uiStrings = {
       price_asc: "Price (lowest)",
       price_desc: "Price (highest)"
     },
+    previousDay: "Previous day",
+    nextDay: "Next day",
     closeDay: "Close",
     noEventsForDay: "No events for this day.",
     eventSingular: "event",
@@ -297,7 +301,7 @@ const uiStrings = {
     submitSubtitle: "Las propuestas se revisan antes de publicarse.",
     filters: {
       search: "Buscar",
-      eventType: "Tipo de evento",
+      eventType: "Categorías",
       area: "Zona",
       eventLanguage: "Idioma del evento",
       dateFrom: "Desde",
@@ -310,6 +314,8 @@ const uiStrings = {
       price_asc: "Precio (más bajo)",
       price_desc: "Precio (más alto)"
     },
+    previousDay: "Día anterior",
+    nextDay: "Día siguiente",
     closeDay: "Cerrar",
     noEventsForDay: "No hay eventos para este día.",
     eventSingular: "evento",
@@ -324,7 +330,7 @@ const uiStrings = {
     submitSubtitle: "Propozimet shqyrtohen para publikimit.",
     filters: {
       search: "Kërko",
-      eventType: "Lloji i eventit",
+      eventType: "Kategoritë",
       area: "Zona",
       eventLanguage: "Gjuha e eventit",
       dateFrom: "Nga",
@@ -337,6 +343,8 @@ const uiStrings = {
       price_asc: "Çmimi (më i ulët)",
       price_desc: "Çmimi (më i lartë)"
     },
+    previousDay: "Dita e mëparshme",
+    nextDay: "Dita tjetër",
     closeDay: "Mbylle",
     noEventsForDay: "Nuk ka evente për këtë ditë.",
     eventSingular: "event",
@@ -1308,6 +1316,7 @@ function createEventDetailContent(event, options = {}) {
   const location = escapeHtml(rawLocation);
   const date = formatDateRange(event.date_start, event.date_end, event.all_day);
   const languages = escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "));
+  const categories = escapeHtml(getEventCategoryLabel(event));
   const price = escapeHtml(formatPrice(event));
   const ticketUrl = safeUrl(event.ticket_url);
   const sourceUrl = safeUrl(event.source_url);
@@ -1333,7 +1342,7 @@ function createEventDetailContent(event, options = {}) {
       <div class="meta">
         <span>Location: ${location}</span>
         <span>Date: ${escapeHtml(date)}</span>
-        <span>Type: ${escapeHtml(event.event_type || "")}</span>
+        <span>Categories: ${categories}</span>
         <span>Languages: ${languages}</span>
         <span>Price: ${price}</span>
       </div>
@@ -1885,7 +1894,7 @@ function filterEvents() {
     .filter((event) => {
       const searchText = `${pickText(event, "title")} ${pickText(event, "description")} ${pickText(event, "location")}`.toLowerCase();
       const matchesSearch = !search || searchText.includes(search.toLowerCase());
-      const matchesType = !eventType.length || eventType.includes(event.event_type);
+      const matchesType = !eventType.length || getEventCategories(event).some((value) => eventType.includes(value));
       const matchesArea = !area.length || area.includes(normalizeAreaValue(event.area));
       const matchesLanguage = !eventLanguage.length || (event.event_language || []).some((language) => eventLanguage.includes(language));
       const startDate = event.date_start ? new Date(event.date_start) : null;
@@ -2197,7 +2206,7 @@ function renderEvents() {
       meta.innerHTML = `
         <span>📍 ${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area))}</span>
         <span>🗓️ ${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
-        <span>🏷️ ${escapeHtml(event.event_type || "")}</span>
+        <span>🏷️ ${escapeHtml(getEventCategoryLabel(event))}</span>
         <span>💬 ${escapeHtml((event.event_language || []).map((value) => formatEventLanguageValue(value, state.eventLanguageOptions)).join(", "))}</span>
         <span>💰 ${escapeHtml(formatPrice(event))}</span>
       `;
@@ -2374,8 +2383,22 @@ function getCalendarCountLabel(count) {
   return `${count} ${noun}`;
 }
 
+function getEventCategories(event) {
+  return resolveEventTypes(event?.event_types, event?.event_type);
+}
+
+function getEventCategoryLabel(event) {
+  return formatEventTypes(event?.event_types, event?.event_type);
+}
+
 function clearCalendarDayFocus() {
   state.selectedCalendarDayKey = "";
+}
+
+function selectedCalendarDate() {
+  if (!state.selectedCalendarDayKey) return null;
+  const date = new Date(`${state.selectedCalendarDayKey}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function shiftCalendarMonth(monthOffset) {
@@ -2386,6 +2409,15 @@ function shiftCalendarMonth(monthOffset) {
 
 function openCalendarDayAfterRender(date) {
   state.selectedCalendarDayKey = toDateKey(date);
+  render();
+}
+
+function shiftSelectedCalendarDay(dayOffset) {
+  const current = selectedCalendarDate();
+  if (!current) return;
+  const next = addDays(current, dayOffset);
+  state.calendarDate = new Date(next.getFullYear(), next.getMonth(), 1);
+  state.selectedCalendarDayKey = toDateKey(next);
   render();
 }
 
@@ -2465,6 +2497,7 @@ function buildDayPanelEventCard(event, meta) {
       <div class="calendar-day-event-meta">
         <span>${escapeHtml(formatDateRange(event.date_start, event.date_end, event.all_day))}</span>
         <span>${escapeHtml(pickText(event, "location") || formatAreaLabel(event.area) || "")}</span>
+        <span>${escapeHtml(getEventCategoryLabel(event))}</span>
       </div>
       ${badges.length ? `<div class="calendar-day-event-badges">${badges.map((badge) => `<span class="calendar-day-event-badge">${escapeHtml(badge)}</span>`).join("")}</div>` : ""}
     </div>
@@ -2503,6 +2536,8 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
 
   const header = document.createElement("div");
   header.className = "calendar-day-focus-header";
+  const actions = document.createElement("div");
+  actions.className = "calendar-day-focus-actions";
   const headingWrap = document.createElement("div");
   headingWrap.className = "calendar-day-focus-copy";
   const kicker = document.createElement("span");
@@ -2514,7 +2549,29 @@ function buildCalendarDayFocusPanel(selectedDate, events) {
   summary.className = "calendar-day-focus-summary";
   summary.textContent = getCalendarCountLabel(events.length);
   headingWrap.append(kicker, title, summary);
-  header.append(headingWrap);
+  const prevDayButton = document.createElement("button");
+  prevDayButton.type = "button";
+  prevDayButton.className = "calendar-day-focus-nav calendar-day-focus-prev";
+  prevDayButton.setAttribute("aria-label", strings.previousDay);
+  prevDayButton.textContent = "←";
+  prevDayButton.addEventListener("click", () => shiftSelectedCalendarDay(-1));
+  const nextDayButton = document.createElement("button");
+  nextDayButton.type = "button";
+  nextDayButton.className = "calendar-day-focus-nav calendar-day-focus-next";
+  nextDayButton.setAttribute("aria-label", strings.nextDay);
+  nextDayButton.textContent = "→";
+  nextDayButton.addEventListener("click", () => shiftSelectedCalendarDay(1));
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "calendar-day-focus-close";
+  closeButton.setAttribute("aria-label", strings.closeDay);
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => {
+    clearCalendarDayFocus();
+    render();
+  });
+  actions.append(prevDayButton, nextDayButton, closeButton);
+  header.append(headingWrap, actions);
   panel.appendChild(header);
 
   if (!events.length) {

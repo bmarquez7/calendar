@@ -9,8 +9,61 @@ export const EVENT_TYPES = [
   "Community",
   "Food & Drink",
   "Education",
-  "Wellness"
+  "Health & Wellness"
 ];
+
+const EVENT_TYPE_ALIASES = new Map([
+  ["wellness", "Health & Wellness"],
+  ["health wellness", "Health & Wellness"],
+  ["health and wellness", "Health & Wellness"],
+  ["education", "Education"]
+]);
+
+function normalizeEventTypeKey(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeEventTypeValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const alias = EVENT_TYPE_ALIASES.get(normalizeEventTypeKey(raw));
+  if (alias) return alias;
+  return EVENT_TYPES.find((option) => normalizeEventTypeKey(option) === normalizeEventTypeKey(raw)) || raw;
+}
+
+export function parseEventTypes(input, fallback = "") {
+  const source = Array.isArray(input)
+    ? input
+    : String(input || "")
+      .split(",");
+  const values = [...source, ...(fallback ? [fallback] : [])]
+    .map((value) => normalizeEventTypeValue(value))
+    .filter(Boolean);
+  return [...new Set(values)];
+}
+
+export function resolveEventTypes(eventTypes, eventType = "") {
+  const parsed = parseEventTypes(eventTypes);
+  if (parsed.length) return parsed;
+  const fallback = normalizeEventTypeValue(eventType);
+  if (!fallback) return [];
+  if (fallback === "Education" || fallback === "Health & Wellness") {
+    return ["Education", "Health & Wellness"];
+  }
+  return [fallback];
+}
+
+export function formatEventTypes(eventTypes, eventType = "") {
+  return resolveEventTypes(eventTypes, eventType).join(", ");
+}
 
 export const PRICE_TYPES = [
   "Free",

@@ -11,6 +11,7 @@
     "rss-parser": "^3.13.0"
   },
   "overrides": {
+    "axios": "^1.15.2",
     "follow-redirects": "^1.15.12"
   }
 }

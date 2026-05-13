@@ -1219,8 +1219,34 @@ section {
 .calendar-day-focus-header {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 10px;
+}
+
+.calendar-day-focus-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-day-focus-nav,
+.calendar-day-focus-close {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--brand-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.calendar-day-focus-close {
+  font-size: 22px;
 }
 
 .calendar-day-focus-copy {
@@ -2925,6 +2951,26 @@ section {
     padding-bottom: 12px;
   }
 
+  .calendar-month-row.has-expanded-day {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .calendar-month-row.has-expanded-day .calendar-cell:not(.is-expanded) {
+    flex: 1 0 calc((100% - 24px) / 7);
+    transform: none;
+    opacity: 0.74;
+    filter: saturate(0.82);
+  }
+
+  .calendar-month-row.has-expanded-day .calendar-cell.is-expanded {
+    order: 2;
+    flex: 1 0 100%;
+    min-width: 100%;
+    width: 100%;
+    min-height: 0;
+  }
+
   .calendar-day-focus {
     margin-top: 0;
     padding: 11px;
@@ -2934,25 +2980,63 @@ section {
 
   .calendar-day-focus-header {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .calendar-day-focus-grid {
-    grid-template-columns: repeat(var(--calendar-expanded-columns, 2), minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .cards.event-tile-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .event-tile-body {
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .event-tile-body h3 {
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
+  .event-tile-date,
+  .event-tile-location {
+    font-size: 10px;
+    line-height: 1.2;
   }
 
   .calendar-day-event-copy {
-    padding: 10px;
-    gap: 7px;
+    padding: 8px;
+    gap: 5px;
   }
 
   .calendar-day-event-copy h4 {
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .calendar-day-event-meta {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .calendar-day-focus-actions {
+    gap: 4px;
+  }
+
+  .calendar-day-focus-nav,
+  .calendar-day-focus-close {
+    min-width: 30px;
+    min-height: 30px;
+    border-radius: 9px;
+    font-size: 14px;
+  }
+
+  .calendar-day-focus-close {
     font-size: 20px;
   }
 
@@ -3242,7 +3326,7 @@ section {
   }
 
   .cards.event-tile-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .hero h1 {
@@ -3303,7 +3387,7 @@ section {
   }
 
   .calendar-day-focus-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .badge {

@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEventTypes } from "../web/shared/constants.js";
 
 const app = Fastify({ logger: true });
 
@@ -224,6 +225,7 @@ function uniqueImageUrls(featuredValue, galleryValues) {
 }
 
 function normalizeSubmissionRow(row) {
+  const eventTypes = parseEventTypes(row?.event_types, row?.event_type || "");
   const eventImageUrls = uniqueImageUrls(
     normalizePublicUrl(row?.event_image_url),
     toArray(row?.event_image_urls).map((value) => normalizePublicUrl(value)).filter(Boolean)
@@ -239,7 +241,8 @@ function normalizeSubmissionRow(row) {
     location_en: row?.location_en ? String(row.location_en).trim() : null,
     location_es: row?.location_es ? String(row.location_es).trim() : null,
     location_sq: row?.location_sq ? String(row.location_sq).trim() : null,
-    event_type: String(row?.event_type || "").trim(),
+    event_type: eventTypes[0] || "",
+    event_types: eventTypes,
     area: String(row?.area || "").trim(),
     event_language: toArray(row?.event_language).map((value) => String(value).trim()).filter(Boolean),
     date_start: row?.date_start || null,
@@ -373,7 +376,6 @@ function validateSubmissionRow(row, index, sourceRow = {}) {
     row.title_en,
     row.description_en,
     row.location_en,
-    row.event_type,
     row.area,
     row.date_start,
     row.date_end,
@@ -382,6 +384,9 @@ function validateSubmissionRow(row, index, sourceRow = {}) {
   ];
   if (required.some((value) => !value)) {
     return `Event ${index + 1} is missing required fields.`;
+  }
+  if (!row.event_types.length) {
+    return `Event ${index + 1} must include at least one category.`;
   }
   if (!row.event_language.length) {
     return `Event ${index + 1} must include at least one language.`;

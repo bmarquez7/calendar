@@ -1,6 +1,15 @@
 import { createClient } from "../shared/vendor.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT_IMAGE_BUCKET, ADMIN_API_URL } from "../shared/config.js";
-import { AREA_GROUPS, EVENT_TYPES, formatAreaLabel, normalizeAreaValue, isFeaturedEligibleArea } from "../shared/constants.js";
+import {
+  AREA_GROUPS,
+  EVENT_TYPES,
+  formatAreaLabel,
+  formatEventTypes,
+  normalizeAreaValue,
+  isFeaturedEligibleArea,
+  parseEventTypes,
+  resolveEventTypes
+} from "../shared/constants.js";
 
 const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -661,7 +670,7 @@ function matchesAdminSearch(event, rawQuery) {
     event.location_es,
     event.location_sq,
     formatAreaLabel(event.area || ""),
-    event.event_type,
+    formatEventTypes(event.event_types, event.event_type),
     event.status
   ]
     .map((value) => normalizeSearchValue(value))
@@ -674,6 +683,25 @@ function uniqueSortedStrings(values) {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
+function eventTypeValues(event) {
+  return resolveEventTypes(event?.event_types, event?.event_type);
+}
+
+function eventTypeLabel(event) {
+  return formatEventTypes(event?.event_types, event?.event_type);
+}
+
+function summarizeEventTypeLabel(events) {
+  const categoryLists = events.map((event) => eventTypeValues(event)).filter((values) => values.length);
+  if (!categoryLists.length) return "";
+  const uniqueLists = [...new Set(categoryLists.map((values) => values.join("|")))];
+  if (uniqueLists.length === 1) {
+    return categoryLists[0].join(", ");
+  }
+  const distinctTypes = [...new Set(categoryLists.flat())];
+  return distinctTypes.length <= 3 ? distinctTypes.join(", ") : "Multiple categories";
+}
+
 function queueAreaFilterOptions(events) {
   return uniqueSortedStrings(events.map((event) => formatAreaLabel(event.area || "")));
 }
@@ -681,7 +709,7 @@ function queueAreaFilterOptions(events) {
 function queueTypeFilterOptions(events) {
   return uniqueSortedStrings([
     ...EVENT_TYPES,
-    ...events.map((event) => String(event.event_type || "").trim())
+    ...events.flatMap((event) => eventTypeValues(event))
   ]);
 }
 
@@ -774,7 +802,7 @@ function closeAdminFilterPickers() {
 function matchesAdminQueueFilters(event) {
   if (!matchesAdminSearch(event, adminSearchQuery)) return false;
   if (adminAreaFilters.length && !adminAreaFilters.includes(formatAreaLabel(event.area || ""))) return false;
-  if (adminTypeFilters.length && !adminTypeFilters.includes(String(event.event_type || "").trim())) return false;
+  if (adminTypeFilters.length && !eventTypeValues(event).some((value) => adminTypeFilters.includes(value))) return false;
   return true;
 }
 
@@ -806,7 +834,7 @@ function summarizeSeries(events) {
   const last = sorted[sorted.length - 1];
   const distinctTitles = [...new Set(sorted.map((event) => String(event.title_en || "").trim()).filter(Boolean))];
   const distinctAreas = [...new Set(sorted.map((event) => formatAreaLabel(event.area || "")).filter(Boolean))];
-  const distinctTypes = [...new Set(sorted.map((event) => String(event.event_type || "").trim()).filter(Boolean))];
+  const typeLabel = summarizeEventTypeLabel(sorted);
   const distinctStatuses = [...new Set(sorted.map((event) => String(event.status || "").trim()).filter(Boolean))];
   return {
     id: String(first.recurrence_group_id),
@@ -818,7 +846,7 @@ function summarizeSeries(events) {
     statusParts: buildStatusBreakdown(sorted),
     dateLabel: `${first.date_start ? new Date(first.date_start).toLocaleString() : "Unknown"}${last?.date_start && last.date_start !== first.date_start ? ` → ${new Date(last.date_start).toLocaleString()}` : ""}`,
     areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
-    typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
+    typeLabel: typeLabel || "Multiple categories",
     posterUrl: safeUrl(first.event_image_url),
     imageUrls: sorted.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: sorted.some((event) => event.is_highlighted),
@@ -849,7 +877,7 @@ function buildSingleEventEntry(event) {
     statusParts: [event.status || ""],
     dateLabel: event.date_start ? new Date(event.date_start).toLocaleString() : "",
     areaLabel: formatAreaLabel(event.area || ""),
-    typeLabel: event.event_type || "",
+    typeLabel: eventTypeLabel(event),
     posterUrl: safeUrl(event.event_image_url),
     imageUrls: getEventImages(event),
     isHighlighted: Boolean(event.is_highlighted),
@@ -919,7 +947,7 @@ function summarizeTitleGroup(entries) {
   const first = sortedEvents[0];
   const last = sortedEvents[sortedEvents.length - 1];
   const distinctAreas = [...new Set(allEvents.map((event) => formatAreaLabel(event.area || "")).filter(Boolean))];
-  const distinctTypes = [...new Set(allEvents.map((event) => String(event.event_type || "").trim()).filter(Boolean))];
+  const typeLabel = summarizeEventTypeLabel(allEvents);
   const title = entries[0]?.title || "Untitled";
   const titleKey = entries[0]?.titleGroupKey || normalizeTitleGroupKey(title);
   return {
@@ -931,7 +959,7 @@ function summarizeTitleGroup(entries) {
     statusParts: buildStatusBreakdown(allEvents),
     dateLabel: `${first?.date_start ? new Date(first.date_start).toLocaleString() : "Unknown"}${last?.date_start && last.date_start !== first.date_start ? ` → ${new Date(last.date_start).toLocaleString()}` : ""}`,
     areaLabel: distinctAreas.length === 1 ? distinctAreas[0] : "Multiple areas",
-    typeLabel: distinctTypes.length === 1 ? distinctTypes[0] : "Multiple types",
+    typeLabel: typeLabel || "Multiple categories",
     posterUrl: entries.find((entry) => entry.posterUrl)?.posterUrl || "",
     imageUrls: allEvents.flatMap((event) => getEventImages(event)).filter((value, index, arr) => arr.indexOf(value) === index),
     isHighlighted: allEvents.some((event) => event.is_highlighted),
@@ -1372,7 +1400,7 @@ function fillEditForm(event) {
   editForm.location_en.value = event.location_en || "";
   editForm.location_es.value = event.location_es || "";
   editForm.location_sq.value = event.location_sq || "";
-  editForm.event_type.value = event.event_type || "";
+  editForm.event_type.value = eventTypeLabel(event);
   editForm.area.value = normalizeAreaValue(event.area) || "";
   editForm.event_language.value = (event.event_language || []).join(",");
   editForm.date_start.value = toLocalInputValue(event.date_start);
@@ -1412,6 +1440,7 @@ function clearFormForNew() {
 }
 
 function toPayload(formData) {
+  const eventTypes = parseEventTypes(formData.get("event_type") || "");
   const status = formData.get("status") || "approved";
   const featureBlocked = formData.get("feature_blocked") === "on";
   const repeatFrequency = formData.get("repeat_frequency") || "none";
@@ -1430,7 +1459,8 @@ function toPayload(formData) {
     location_en: formData.get("location_en") || null,
     location_es: formData.get("location_es") || null,
     location_sq: formData.get("location_sq") || null,
-    event_type: formData.get("event_type") || "Community",
+    event_type: eventTypes[0] || "Community",
+    event_types: eventTypes,
     area,
     event_language: (formData.get("event_language") || "en")
       .split(",")
@@ -2340,7 +2370,7 @@ function addBatchRow(prefill = {}) {
   row.appendChild(createBatchCell("text", "batch-title", "Title", true));
   row.appendChild(createBatchCell("text", "batch-description", "Description", true));
   row.appendChild(createBatchCell("text", "batch-location", "Location", true));
-  row.appendChild(createBatchCell("text", "batch-type", "Type", true));
+  row.appendChild(createBatchCell("text", "batch-type", "Categories (comma)", true));
   row.appendChild(createBatchSelectCell("batch-area", AREA_GROUPS, "Choose area", true));
   row.appendChild(createBatchCell("datetime-local", "batch-date-start", "", true));
   row.appendChild(createBatchCell("datetime-local", "batch-date-end", "", true));
@@ -2379,7 +2409,7 @@ function addBatchRow(prefill = {}) {
   row.querySelector(".batch-title").value = prefill.title_en || "";
   row.querySelector(".batch-description").value = prefill.description_en || "";
   row.querySelector(".batch-location").value = prefill.location_en || "";
-  row.querySelector(".batch-type").value = prefill.event_type || "";
+  row.querySelector(".batch-type").value = eventTypeLabel(prefill);
   row.querySelector(".batch-area").value = prefill.area || "";
   row.querySelector(".batch-date-start").value = toLocalInputValue(prefill.date_start);
   row.querySelector(".batch-date-end").value = toLocalInputValue(prefill.date_end);
@@ -2430,7 +2460,8 @@ function collectBatchRowPayload(row) {
   const title_en = (row.querySelector(".batch-title")?.value || "").trim();
   const description_en = (row.querySelector(".batch-description")?.value || "").trim();
   const location_en = (row.querySelector(".batch-location")?.value || "").trim();
-  const event_type = (row.querySelector(".batch-type")?.value || "").trim();
+  const eventTypes = parseEventTypes((row.querySelector(".batch-type")?.value || "").trim());
+  const event_type = eventTypes[0] || "";
   const area = (row.querySelector(".batch-area")?.value || "").trim();
   const date_start = toIsoOrNull(row.querySelector(".batch-date-start")?.value || "");
   const date_end = toIsoOrNull(row.querySelector(".batch-date-end")?.value || "");
@@ -2456,6 +2487,7 @@ function collectBatchRowPayload(row) {
       description_en,
       location_en,
       event_type,
+      event_types: eventTypes,
       area,
       date_start,
       date_end,
