@@ -3,19 +3,18 @@ add column if not exists event_types text[] not null default '{}'::text[];
 
 update public.events
 set event_types = (
-  select array_agg(distinct normalized_value order by
-    case normalized_value
-      when 'Education' then 1
-      when 'Health & Wellness' then 2
-      else 3
-    end,
-    normalized_value
-  )
+  select array_agg(normalized_value order by sort_order, normalized_value)
   from (
-    select case
-      when trim(raw_value) = 'Wellness' then 'Health & Wellness'
-      else trim(raw_value)
-    end as normalized_value
+    select distinct
+      case
+        when trim(raw_value) = 'Wellness' then 'Health & Wellness'
+        else trim(raw_value)
+      end as normalized_value,
+      case
+        when trim(raw_value) = 'Education' then 1
+        when trim(raw_value) in ('Wellness', 'Health & Wellness') then 2
+        else 3
+      end as sort_order
     from unnest(
       case
         when coalesce(array_length(event_types, 1), 0) > 0 then
