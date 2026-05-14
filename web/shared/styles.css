@@ -3153,14 +3153,26 @@ section {
   #description-modal .description-modal-content,
   #picker-modal .picker-modal-content {
     position: relative;
-    width: 100%;
+    width: calc(100% - 8px);
     max-width: none;
-    border-radius: 20px 20px 0 0;
-    margin: 0;
+    max-height: calc(100vh - 16px);
+    border-radius: 18px;
+    margin: 12px auto 18px;
     padding: 14px 14px 22px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     top: auto;
     left: auto;
     transform: none;
+  }
+
+  #description-modal,
+  #picker-modal {
+    display: block;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 0 8px 18px;
   }
 
   .description-editor {
@@ -3336,6 +3348,7 @@ section {
 
   .picker-modal-body {
     gap: 10px;
+    overflow-y: auto;
   }
 
   .public-submit-action-bar {
@@ -3372,6 +3385,14 @@ section {
 
   .lang-row {
     grid-template-columns: 1fr;
+  }
+
+  .default-event-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .default-event-image-tile {
+    min-height: 132px;
   }
 }
 
@@ -3443,6 +3464,20 @@ section {
 
   .calendar-day-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .default-event-image-grid {
+    gap: 8px;
+  }
+
+  .default-event-image-tile {
+    min-height: 118px;
+    border-radius: 12px;
+  }
+
+  .default-event-image-caption {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 
   .badge {

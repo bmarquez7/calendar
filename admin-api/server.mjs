@@ -49,6 +49,7 @@ const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(__dirname, "..", "web");
 const appOrigin = normalizeOrigin(APP_ORIGIN);
+const supabaseOrigin = normalizeOrigin(SUPABASE_URL);
 let lastCleanupRunAt = 0;
 let cleanupPromise = null;
 const publicRateLimitState = new Map();
@@ -97,6 +98,36 @@ function normalizeOrigin(value) {
   } catch {
     return "";
   }
+}
+
+function joinCsp(parts) {
+  return parts.filter(Boolean).join("; ");
+}
+
+function buildPageCsp({ allowFrames = false } = {}) {
+  const connectSrc = ["'self'"];
+  if (supabaseOrigin) connectSrc.push(supabaseOrigin);
+  return joinCsp([
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    `script-src 'self' https://cdn.jsdelivr.net`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
+    `font-src 'self' https://fonts.gstatic.com data:`,
+    `img-src 'self' data: blob: https:`,
+    `connect-src ${connectSrc.join(" ")}`,
+    allowFrames ? "" : "frame-ancestors 'self'",
+    "form-action 'self'"
+  ]);
+}
+
+function buildApiCsp() {
+  return joinCsp([
+    "default-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
+    "form-action 'none'"
+  ]);
 }
 
 function normalizeOptionalEmail(value) {
@@ -868,6 +899,7 @@ app.addHook("onSend", async (request, reply, payload) => {
   reply.header("X-Content-Type-Options", "nosniff");
   reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
   reply.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  reply.header("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
 
   if (path.startsWith("/admin") || path.startsWith("/widget") || path.startsWith("/shared/") || path.startsWith("/v1/")) {
     reply.header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -877,6 +909,13 @@ app.addHook("onSend", async (request, reply, payload) => {
   }
   if (path.startsWith("/admin") || path.startsWith("/v1/")) {
     reply.header("X-Frame-Options", "SAMEORIGIN");
+  }
+  if (path.startsWith("/admin")) {
+    reply.header("Content-Security-Policy", buildPageCsp());
+  } else if (path.startsWith("/widget")) {
+    reply.header("Content-Security-Policy", buildPageCsp({ allowFrames: true }));
+  } else if (path.startsWith("/v1/")) {
+    reply.header("Content-Security-Policy", buildApiCsp());
   }
   return payload;
 });
