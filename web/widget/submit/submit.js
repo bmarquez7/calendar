@@ -46,10 +46,12 @@ const descriptionModal = document.getElementById("description-modal");
 const descriptionEditor = document.getElementById("description-editor");
 const descriptionCounter = document.getElementById("description-counter");
 const descriptionDoneButton = document.getElementById("description-done");
+const descriptionCloseButton = document.getElementById("description-close");
 const pickerModal = document.getElementById("picker-modal");
 const pickerModalTitle = document.getElementById("picker-modal-title");
 const pickerModalBody = document.getElementById("picker-modal-body");
 const pickerDoneButton = document.getElementById("picker-done");
+const pickerCloseButton = document.getElementById("picker-close");
 
 const submitterName = document.getElementById("submitter-name");
 const submitterEmail = document.getElementById("submitter-email");
@@ -1667,7 +1669,9 @@ fillRowsButton.addEventListener("click", () => {
 submitButton.addEventListener("click", submitRows);
 descriptionEditor.addEventListener("input", () => setDescriptionCounter(descriptionEditor.value));
 descriptionDoneButton.addEventListener("click", () => closeDescriptionModal(true));
+descriptionCloseButton?.addEventListener("click", () => closeDescriptionModal(true));
 pickerDoneButton.addEventListener("click", () => closePickerModal(true));
+pickerCloseButton?.addEventListener("click", () => closePickerModal(true));
 
 pickerModal.addEventListener("click", (event) => {
   if (event.target.classList.contains("modal-backdrop")) {

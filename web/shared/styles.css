@@ -960,6 +960,10 @@ section {
   display: none !important;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .toggle-button.active {
   background: var(--brand);
   color: white;
