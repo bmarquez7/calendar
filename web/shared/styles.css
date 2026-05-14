@@ -1118,6 +1118,8 @@ section {
   transform: none;
   pointer-events: auto;
   gap: 8px;
+  min-height: 0;
+  flex: 0 0 auto;
 }
 
 .calendar-date {
